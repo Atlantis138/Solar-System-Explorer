@@ -1,0 +1,360 @@
+# Solar System Data Configuration
+# Format: [TYPE] followed by key:value pairs
+# Elements: a e i N w M (J2000)
+
+# --- THE SUN ---
+[SUN]
+id: sun
+name: 太阳
+englishName: Sun
+color: #FDB813
+radius: 14
+relativeRadius: 109
+massRelativeToSun: 1
+elements: 0 0 0 0 0 0
+
+# --- PLANETS ---
+
+[PLANET]
+id: mercury
+name: 水星
+englishName: Mercury
+color: #A5A5A5
+radius: 4
+relativeRadius: 0.38
+massRelativeToSun: 1.66e-7
+elements: 0.387098 0.205630 7.00487 48.33167 29.124 174.796
+
+[PLANET]
+id: venus
+name: 金星
+englishName: Venus
+color: #E3BB76
+radius: 7
+relativeRadius: 0.95
+massRelativeToSun: 2.44e-6
+elements: 0.723332 0.006773 3.39471 76.68069 54.85229 50.4161
+
+[PLANET]
+id: earth
+name: 地球
+englishName: Earth
+color: #22A6B3
+radius: 7.5
+relativeRadius: 1.0
+massRelativeToSun: 3.003e-6
+elements: 1.000000 0.016708 0.00005 -11.26064 102.94719 357.51716
+
+[PLANET]
+id: mars
+name: 火星
+englishName: Mars
+color: #EB4D4B
+radius: 5
+relativeRadius: 0.53
+massRelativeToSun: 3.21e-7
+elements: 1.523679 0.093405 1.84972 49.55740 286.5016 19.412
+
+[PLANET]
+id: jupiter
+name: 木星
+englishName: Jupiter
+color: #F9CA24
+radius: 18
+relativeRadius: 11.2
+massRelativeToSun: 9.54e-4
+elements: 5.202603 0.048498 1.30305 100.4542 273.8777 20.020
+
+[PLANET]
+id: saturn
+name: 土星
+englishName: Saturn
+color: #F0932B
+radius: 15
+relativeRadius: 9.45
+massRelativeToSun: 2.85e-4
+elements: 9.554909 0.055546 2.48866 113.6634 339.3939 317.020
+
+[PLANET]
+id: uranus
+name: 天王星
+englishName: Uranus
+color: #7ED6DF
+radius: 10
+relativeRadius: 4.0
+massRelativeToSun: 4.36e-5
+elements: 19.218446 0.046381 0.77319 74.0060 96.6612 142.5905
+
+[PLANET]
+id: neptune
+name: 海王星
+englishName: Neptune
+color: #4834D4
+radius: 10
+relativeRadius: 3.88
+massRelativeToSun: 5.15e-5
+elements: 30.110387 0.009456 1.76995 131.7806 272.8461 260.2471
+
+# --- SATELLITES ---
+
+[SATELLITE]
+parent: earth
+id: moon
+name: 月球
+englishName: Moon
+color: #cccccc
+radius: 1.8
+relativeRadius: 0.272
+elements: 0.002570 0.05490 5.145 125.08 318.15 115.37
+
+[SATELLITE]
+parent: mars
+id: phobos
+name: 火卫一
+englishName: Phobos
+color: #B0A090
+radius: 1.0
+relativeRadius: 0.003
+elements: 0.0000626 0.0151 1.075 164.93 150.25 105.88
+
+[SATELLITE]
+parent: mars
+id: deimos
+name: 火卫二
+englishName: Deimos
+color: #C0B0A0
+radius: 0.8
+relativeRadius: 0.002
+elements: 0.0001568 0.0002 1.793 356.29 260.73 286.60
+
+[SATELLITE]
+parent: jupiter
+id: io
+name: 木卫一
+englishName: Io
+color: #F8E559
+radius: 2.0
+relativeRadius: 0.286
+elements: 0.002819 0.0041 0.036 43.98 84.13 342.02
+
+[SATELLITE]
+parent: jupiter
+id: europa
+name: 木卫二
+englishName: Europa
+color: #C9C2BD
+radius: 1.8
+relativeRadius: 0.245
+elements: 0.004486 0.0094 0.466 219.11 88.97 171.02
+
+[SATELLITE]
+parent: jupiter
+id: ganymede
+name: 木卫三
+englishName: Ganymede
+color: #A09588
+radius: 2.8
+relativeRadius: 0.413
+elements: 0.007155 0.0011 0.204 63.55 192.42 317.54
+
+[SATELLITE]
+parent: jupiter
+id: callisto
+name: 木卫四
+englishName: Callisto
+color: #6D6053
+radius: 2.6
+relativeRadius: 0.378
+elements: 0.012585 0.0074 0.205 298.85 52.64 181.41
+
+[SATELLITE]
+parent: saturn
+id: titan
+name: 土卫六
+englishName: Titan
+color: #D4AF37
+radius: 2.7
+relativeRadius: 0.404
+elements: 0.008168 0.0288 0.348 168.98 175.48 201.09
+
+[SATELLITE]
+parent: saturn
+id: enceladus
+name: 土卫二
+englishName: Enceladus
+color: #FFFFFF
+radius: 1.2
+relativeRadius: 0.04
+elements: 0.001591 0.0047 0.019 93.06 203.22 322.33
+
+[SATELLITE]
+parent: uranus
+id: titania
+name: 天卫三
+englishName: Titania
+color: #E0D0C0
+radius: 1.8
+relativeRadius: 0.123
+elements: 0.002916 0.0011 0.340 99.77 284.40 23.78
+
+[SATELLITE]
+parent: uranus
+id: oberon
+name: 天卫四
+englishName: Oberon
+color: #A09080
+radius: 1.7
+relativeRadius: 0.119
+elements: 0.003900 0.0014 0.058 279.70 104.40 276.32
+
+[SATELLITE]
+parent: neptune
+id: triton
+name: 海卫一
+englishName: Triton
+color: #B0C0D0
+radius: 2.2
+relativeRadius: 0.212
+elements: 0.002372 0.0000 156.865 172.43 349.20 276.37
+
+# --- RINGS ---
+
+[RING]
+parent: jupiter
+id: jupiter_ring
+name: Main Ring
+color: #C0A080
+opacity: 0.1
+tilt: 3.13
+dimensions: 0.000819 0.000862
+
+[RING]
+parent: saturn
+id: saturn_ring
+name: Main Rings
+color: #CDBA96
+opacity: 0.8
+tilt: 26.73
+dimensions: 0.000498 0.000914
+
+[RING]
+parent: uranus
+id: uranus_ring
+name: Epsilon Ring
+color: #333333
+opacity: 0.4
+tilt: 97.77
+dimensions: 0.000254 0.000342
+
+[RING]
+parent: neptune
+id: neptune_ring
+name: Adams Ring
+color: #6666FF
+opacity: 0.15
+tilt: 28.32
+dimensions: 0.000274 0.000421
+
+# --- DWARF PLANETS & ASTEROIDS ---
+
+[DWARF]
+id: ceres
+name: 谷神星
+englishName: Ceres
+type: dwarf
+color: #B0A090
+radius: 3
+relativeRadius: 0.07
+elements: 2.769 0.076 10.59 80.33 73.51 6.77
+
+[DWARF]
+id: vesta
+name: 灶神星
+englishName: Vesta
+type: asteroid
+color: #E0D0A0
+radius: 2.5
+relativeRadius: 0.04
+elements: 2.361 0.088 7.14 103.85 151.20 96.16
+
+[DWARF]
+id: pluto
+name: 冥王星
+englishName: Pluto
+type: dwarf
+color: #e3d1ac
+radius: 3.5
+relativeRadius: 0.18
+elements: 39.481686 0.248807 17.1600 110.3034 113.7632 14.882
+
+[DWARF]
+id: haumea
+name: 妊神星
+englishName: Haumea
+type: dwarf
+color: #E6E6E6
+radius: 3
+relativeRadius: 0.13
+elements: 43.005 0.195 28.21 121.87 240.99 191.20
+
+[DWARF]
+id: makemake
+name: 鸟神星
+englishName: Makemake
+type: dwarf
+color: #DD9988
+radius: 3
+relativeRadius: 0.11
+elements: 45.715 0.155 29.00 79.40 298.41 140.05
+
+[DWARF]
+id: orcus
+name: 亡神星
+englishName: Orcus
+type: dwarf
+color: #999999
+radius: 2.5
+relativeRadius: 0.07
+elements: 39.173 0.227 20.57 268.61 73.03 150.40
+
+[DWARF]
+id: eris
+name: 阋神星
+englishName: Eris
+type: dwarf
+color: #EEEEEE
+radius: 3.5
+relativeRadius: 0.18
+elements: 67.781 0.440 44.04 35.87 151.40 194.83
+
+[DWARF]
+id: sedna
+name: 赛德娜
+englishName: Sedna
+type: dwarf
+color: #AA3322
+radius: 3
+relativeRadius: 0.08
+elements: 506.6 0.849 11.93 144.25 311.29 357.84
+
+# --- COMETS ---
+
+[COMET]
+id: halley
+name: 哈雷彗星
+englishName: 1P/Halley
+type: comet
+color: #88EEEE
+radius: 2
+relativeRadius: 0.05
+elements: 17.834 0.96714 162.26 58.42 111.33 38.38
+
+[COMET]
+id: hale-bopp
+name: 海尔-波普彗星
+englishName: C/1995 O1 (Hale-Bopp)
+type: comet
+color: #E0F0FF
+radius: 3
+relativeRadius: 0.08
+elements: 186.0 0.995086 89.429 282.47 130.59 0.38

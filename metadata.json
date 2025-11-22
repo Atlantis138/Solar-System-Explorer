@@ -1,0 +1,5 @@
+{
+  "name": "太阳系探索V9.0",
+  "description": "An interactive 2D solar system simulation with real-time orbital mechanics and AI-powered search grounding for celestial information. (交互式2D太阳系模拟，具有实时轨道力学和基于AI搜索的天体信息)",
+  "requestFramePermissions": []
+}

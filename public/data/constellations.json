@@ -1,0 +1,64 @@
+[
+  {
+    "name": "猎户座 (Orion)",
+    "lines": [
+      ["betelgeuse", "alnitak"],
+      ["bellatrix", "mintaka"],
+      ["mintaka", "alnilam"],
+      ["alnilam", "alnitak"],
+      ["alnitak", "saiph"],
+      ["mintaka", "rigel"],
+      ["betelgeuse", "bellatrix"],
+      ["rigel", "saiph"]
+    ]
+  },
+  {
+    "name": "北斗七星 (Big Dipper)",
+    "lines": [
+      ["dubhe", "merak"],
+      ["merak", "phecda"],
+      ["phecda", "megrez"],
+      ["megrez", "alioth"],
+      ["alioth", "mizar"],
+      ["mizar", "alkaid"],
+      ["megrez", "dubhe"]
+    ]
+  },
+  {
+    "name": "南十字座 (Crux)",
+    "lines": [
+      ["gacrux", "acrux"],
+      ["delta_cru", "mimosa"]
+    ]
+  },
+  {
+    "name": "夏季大三角 (Summer Triangle)",
+    "lines": [
+      ["vega", "altair"],
+      ["altair", "deneb"],
+      ["deneb", "vega"]
+    ]
+  },
+  {
+    "name": "天蝎座 (Scorpius - Hook)",
+    "lines": [
+      ["antares", "sargas"],
+      ["sargas", "shaula"]
+    ]
+  },
+  {
+    "name": "双子座 (Gemini - Arch)",
+    "lines": [
+      ["pollux", "castor"],
+      ["pollux", "alhena"]
+    ]
+  },
+  {
+    "name": "御夫座 (Auriga)",
+    "lines": [
+      ["capella", "menkalinan"],
+      ["menkalinan", "alnath"],
+      ["alnath", "capella"]
+    ]
+  }
+]
