@@ -245,11 +245,11 @@ const SolarSystem: React.FC<SolarSystemProps> = ({
       )}
 
       {/* Minimalist Compact Watermark Camera Info - Bottom Left */}
-      <div className="absolute bottom-4 left-4 pointer-events-none z-20 bg-gray-900/80 border border-white/10 rounded p-2 flex flex-col gap-0.5 select-none text-white/50 text-[9px] font-mono font-bold tracking-widest uppercase backdrop-blur-sm">
-         <span className="flex items-center justify-between gap-4"><span>TGT</span> <span className="text-white/80">{getTargetName()}</span></span>
-         <span className="flex items-center justify-between gap-4"><span>ZM</span> <span className="text-white/80">{zoomTransform.k.toExponential(1)}x</span></span>
-         <span className="flex items-center justify-between gap-4"><span>TILT</span> <span className="text-white/80">{settings.viewTilt.toFixed(0)}°</span></span>
-         <span className="flex items-center justify-between gap-4"><span>YAW</span> <span className="text-white/80">{settings.viewYaw.toFixed(0)}°</span></span>
+      <div className="absolute bottom-3 left-4 pointer-events-none z-20 flex flex-col gap-px select-none text-gray-600 text-[7px] font-mono font-bold tracking-widest uppercase">
+         <span className="flex items-center gap-2"><span>TGT</span> <span>{getTargetName()}</span></span>
+         <span className="flex items-center gap-2"><span>ZM</span> <span>{zoomTransform.k.toExponential(1)}x</span></span>
+         <span className="flex items-center gap-2"><span>TILT</span> <span>{settings.viewTilt.toFixed(0)}°</span></span>
+         <span className="flex items-center gap-2"><span>YAW</span> <span>{settings.viewYaw.toFixed(0)}°</span></span>
       </div>
     </div>
   );

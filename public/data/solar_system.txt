@@ -271,7 +271,7 @@ elements: 2.769 0.076 10.59 80.33 73.51 6.77
 id: vesta
 name: 灶神星
 englishName: Vesta
-type: asteroid
+type: dwarf
 color: #E0D0A0
 radius: 2.5
 relativeRadius: 0.04

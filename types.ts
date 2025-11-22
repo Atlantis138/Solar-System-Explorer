@@ -76,14 +76,13 @@ export type TimeSpeed = 'paused' | 'realtime' | 'fast' | 'superfast' | 'hyperfas
 export type BackgroundStyle = 'default' | 'milkyway';
 
 export type RenderQuality = 'eco' | 'standard' | 'performance';
-export type CometRenderMode = 'eco' | 'performance';
 
 export type StarLabelOption = 'none' | 'cn' | 'bilingual';
 
 export interface RenderSettings {
   innerQuality: RenderQuality;  // Inner Solar System (Mercury - Asteroid Belt)
   outerQuality: RenderQuality;  // Outer/Dwarf (Jupiter+, TNOs)
-  cometQuality: CometRenderMode; // Small Bodies
+  cometQuality: RenderQuality;  // Small Bodies (Comets & Asteroids)
   allowTrueScaleAllBodies: boolean; // Decouple True Scale from body visibility
 }
 

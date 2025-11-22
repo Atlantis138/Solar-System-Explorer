@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo } from 'react';
 import { PlanetData } from '../types';
 
@@ -29,15 +30,16 @@ color: #cccccc
 radius: 3
 relativeRadius: 0.2
 elements: 39.4 0.24 17.1 110.3 113.7 14.8`,
-  ASTEROID: `[DWARF]
-id: my_asteroid
-name: My Asteroid
-englishName: Custom Asteroid
-type: asteroid
+  COMET: `[COMET]
+id: my_small_body
+name: My Small Body
+englishName: Custom Asteroid/Comet
+type: comet
 color: #888888
 radius: 2
 relativeRadius: 0.05
-elements: 2.7 0.07 10.5 80.3 73.5 6.7`,
+elements: 2.7 0.07 10.5 80.3 73.5 6.7
+# elements: a e i N w M`,
   SATELLITE: `[SATELLITE]
 parent: earth
 id: my_moon

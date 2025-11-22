@@ -1,124 +1,118 @@
 
-import { RenderSettings } from '../types';
+
+import { RenderSettings, PlanetData, RenderQuality } from '../types';
 import { smoothStep } from './projection';
 
 // --- Constants ---
-// Distance Threshold between Inner and Outer System in AU
-// Jupiter is 5.2 AU. Asteroid Belt is ~2.0-3.2 AU.
-// We cut off at 4.8 AU to include Asteroid Belt in 'Inner' and start 'Outer' at Jupiter.
-const INNER_SYSTEM_THRESHOLD_AU = 4.8;
+const INNER_SYSTEM_LIMIT_AU = 4.0;
+const OUTER_SYSTEM_LIMIT_AU = 35.0;
 
-const TIER_2_IDS = ['jupiter', 'saturn', 'uranus', 'neptune'];
+const TRUE_SCALE_RATIO = 23500 / 65; // ~361.5
 
-// --- Helper: Determine if a body belongs to Inner or Outer group based on Semi-Major Axis ---
-export const getBodyGroup = (id: string, semiMajorAxis: number): 'inner' | 'outer' | 'sun' => {
-    if (id === 'sun') return 'sun';
-    if (semiMajorAxis < INNER_SYSTEM_THRESHOLD_AU) return 'inner';
-    return 'outer';
+// Schematic Thresholds (Zoom K)
+const SCHEMATIC_THRESHOLDS = {
+    INNER: 0.34,
+    OUTER: 0.28,
+    COMET: 0.33
+};
+
+/**
+ * Helper to get threshold based on mode
+ */
+const getThreshold = (type: 'INNER' | 'OUTER' | 'COMET', isTrueScale: boolean) => {
+    const base = SCHEMATIC_THRESHOLDS[type];
+    return isTrueScale ? base / TRUE_SCALE_RATIO : base;
+};
+
+/**
+ * Calculates opacity based on Quality Setting and Threshold.
+ * @param quality RenderQuality
+ * @param k current zoom
+ * @param threshold transition threshold
+ * @param mode 'IN' (Visible when k > threshold) or 'OUT' (Visible when k < threshold)
+ */
+const getOpacityFromQuality = (quality: RenderQuality, k: number, threshold: number, mode: 'IN' | 'OUT'): number => {
+    if (quality === 'performance') return 1.0;
+    
+    // Fade window width (approx +/- 10-20%)
+    const range = threshold * 0.2; 
+    const min = threshold - range / 2;
+    const max = threshold + range / 2;
+
+    if (mode === 'IN') {
+        // Visible when Zoomed IN (k > threshold)
+        if (quality === 'eco') return k > threshold ? 1.0 : 0.0;
+        // Standard: Smooth fade
+        return smoothStep(min, max, k);
+    } else {
+        // Visible when Zoomed OUT (k < threshold)
+        if (quality === 'eco') return k < threshold ? 1.0 : 0.0;
+        // Standard: Smooth fade (inverse)
+        return 1.0 - smoothStep(min, max, k);
+    }
 };
 
 /**
  * Calculates the opacity of a celestial body based on Zoom Level (k) and Render Settings.
- * 
- * @param id Body ID
- * @param semiMajorAxis Semi-Major Axis in AU
- * @param k Current Zoom Level
- * @param settings RenderSettings object
- * @param isTrueScale Boolean flag indicating if the app is in True Scale mode
- * @returns opacity (0.0 - 1.0)
  */
 export const calculateBodyOpacity = (
-    id: string, 
-    semiMajorAxis: number,
+    body: PlanetData,
     k: number, 
     settings: RenderSettings, 
     isTrueScale: boolean = false
 ): number => {
-    const group = getBodyGroup(id, semiMajorAxis);
-    
-    // Sun is always visible
-    if (group === 'sun') return 1.0;
+    const { id, elements, category, type } = body;
+    const a = elements.a;
 
-    // Gas Giants (Tier 2) are always visible in this simulation unless specific culling needed
-    if (TIER_2_IDS.includes(id)) return 1.0;
+    if (id === 'sun') return 1.0;
 
-    // --- Inner Solar System Logic ---
-    if (group === 'inner') {
-        const quality = settings.innerQuality;
-        
-        // Performance: Always visible
-        if (quality === 'performance') return 1.0;
+    // Check Categories
+    const isComet = category === 'COMET' || type === 'comet' || type === 'asteroid';
+    const isPlanetOrDwarf = category === 'PLANET' || category === 'DWARF' || type === 'planet' || type === 'dwarf';
 
-        // Thresholds for fading out inner planets when zooming out to outer system
-        // Schematic: ~0.35 is where Saturn becomes dominant
-        // True Scale: ~0.005 is where Inner System is visible, < 0.002 is Outer System view
-        
-        const fadeStart = isTrueScale ? 0.002 : 0.3;
-        const fadeEnd   = isTrueScale ? 0.006 : 0.6;
-        const cutoff    = isTrueScale ? 0.003 : 0.35;
+    // 1. Comet & Asteroid Rendering
+    // Logic: Visible when screen scale > 3.3E-1x (Schematic) for bodies within 4AU
+    if (isComet) {
+        if (a <= INNER_SYSTEM_LIMIT_AU) {
+            const threshold = getThreshold('COMET', isTrueScale);
+            return getOpacityFromQuality(settings.cometQuality, k, threshold, 'IN');
+        }
+        // Comets > 4AU: Default to visible (or use outer logic? User spec only mentioned within 4AU)
+        return 1.0;
+    }
 
-        if (quality === 'eco') {
-            // Eco: Hard Cutoff
-            // If k > cutoff (Zoomed In) -> Visible
-            // If k < cutoff (Zoomed Out) -> Hidden
-            return k > cutoff ? 1.0 : 0.0;
-        } else {
-            // Standard: Smooth Fade
-            // Specific adjustments per planet for better aesthetic in Schematic
-            // (Optional fine-tuning can be added here if needed, but general fade is usually sufficient)
-            if (!isTrueScale) {
-                // Stagger fade for inner planets slightly?
-                // Mercury (0.4 AU) fades last? No, Mercury fades first when zooming out.
-                // Actually, when zooming OUT, k decreases.
-                // We want inner planets to disappear when k is small (zoomed out).
-            }
-            return smoothStep(fadeStart, fadeEnd, k);
+    if (isPlanetOrDwarf) {
+        // 2. Inner Solar System Rendering
+        // Logic: Visible when screen scale > 3.4E-1x for bodies within 4AU
+        if (a <= INNER_SYSTEM_LIMIT_AU) {
+            const threshold = getThreshold('INNER', isTrueScale);
+            return getOpacityFromQuality(settings.innerQuality, k, threshold, 'IN');
+        }
+
+        // 3. Outer Solar System Rendering (TNOs)
+        // Logic: Visible when screen scale < 2.8E-1x for bodies outside 35AU
+        if (a >= OUTER_SYSTEM_LIMIT_AU) {
+            const threshold = getThreshold('OUTER', isTrueScale);
+            return getOpacityFromQuality(settings.outerQuality, k, threshold, 'OUT');
         }
     }
 
-    // --- Outer Solar System (TNOs/Dwarfs) Logic ---
-    if (group === 'outer') {
-        const quality = settings.outerQuality;
-
-        // Performance: Always visible
-        if (quality === 'performance') return 1.0;
-
-        // TNOs should fade out when zooming IN (becoming too sparse/cluttering)
-        // Schematic: ~0.15 is around Neptune orbit view
-        // True Scale: ~0.01 is entering Inner System view
-        
-        const fadeStart = isTrueScale ? 0.005 : 0.4;
-        const fadeEnd   = isTrueScale ? 0.02 : 0.9;
-        const cutoff    = isTrueScale ? 0.01 : 0.15;
-
-        if (quality === 'eco') {
-            // Eco: Hard Cutoff (Hide when zoomed in close)
-            return k < cutoff ? 1.0 : 0.0;
-        } else {
-            // Standard: Smooth Fade (Inverse)
-            return 1.0 - smoothStep(fadeStart, fadeEnd, k);
-        }
-    }
-
+    // 4. Intermediate Bodies (Gas Giants etc between 4AU and 35AU)
+    // Always visible
     return 1.0;
 };
 
 /**
- * Determines if a Comet or Asteroid should be rendered based on distance and settings.
- * 
- * @param distanceAU Distance from Sun in AU
- * @param settings RenderSettings object
- * @returns boolean
+ * Deprecated distance-based culling, replaced by opacity logic.
+ * Keeping for compatibility if needed, but returning true to delegate to opacity.
  */
 export const shouldRenderComet = (distanceAU: number, settings: RenderSettings): boolean => {
-    if (settings.cometQuality === 'performance') return true;
-    // Eco Mode: Only show objects within 50 AU (Pluto-ish range)
-    return distanceAU <= 50;
+    return true; 
 };
 
 /**
- * Global Visibility Threshold to skip rendering entirely if opacity is too low.
+ * Global Visibility Threshold
  */
-export const getVisibilityThreshold = (isMobileOrEco: boolean): number => {
-    return isMobileOrEco ? 0.9 : 0.01;
+export const getVisibilityThreshold = (isEco: boolean): number => {
+    return isEco ? 0.9 : 0.01;
 };

@@ -1,3 +1,5 @@
+
+
 import React, { useEffect, useRef, useMemo, useState } from 'react';
 import { 
   AU_SCALE_TRUE, 
@@ -107,7 +109,7 @@ const TrueScaleSolarSystem: React.FC<TrueScaleSolarSystemProps> = ({
           if (!shouldRenderComet(dist, settings.renderSettings)) return;
       }
       const proj = project3D(rawPos, AU_SCALE_TRUE, settings, k, planet.id, centerOfRotation);
-      const renderOpacity = calculateBodyOpacity(planet.id, planet.elements.a, k, settings.renderSettings, true);
+      const renderOpacity = calculateBodyOpacity(planet, k, settings.renderSettings, true);
       const finalOpacity = proj.opacity * renderOpacity;
 
       flatList.push({ id: planet.id, data: planet, pos: { ...proj, z: proj.depth, opacity: finalOpacity, isVisible: proj.isVisible && finalOpacity > 0.05 }, rawPos: rawPos, type: 'planet' });
@@ -245,7 +247,7 @@ const TrueScaleSolarSystem: React.FC<TrueScaleSolarSystemProps> = ({
                  const item = sceneDataRef.current.find(i => i.id === planet.id);
                  if (!item || !item.pos.isVisible) return;
             }
-            const renderOpacity = calculateBodyOpacity(planet.id, planet.elements.a, k, settings.renderSettings, true);
+            const renderOpacity = calculateBodyOpacity(planet, k, settings.renderSettings, true);
             if (renderOpacity < 0.05) return;
             const hasSatellites = planet.satellites && planet.satellites.length > 0;
             if (!hasSatellites) {

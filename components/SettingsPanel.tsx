@@ -1,6 +1,7 @@
 
+
 import React, { useState } from 'react';
-import { AppSettings, BackgroundStyle, RenderQuality, CometRenderMode, PlanetData, StarLabelOption } from '../types';
+import { AppSettings, BackgroundStyle, RenderQuality, StarLabelOption } from '../types';
 import ObjectManager from './ObjectManager';
 
 interface SettingsPanelProps {
@@ -18,6 +19,8 @@ interface SettingsPanelProps {
   onToggleVisibility: (id: string) => void;
   onDataReload: () => void;
 }
+
+import { PlanetData } from '../types';
 
 const SettingsPanel: React.FC<SettingsPanelProps> = ({ 
   settings, 
@@ -278,22 +281,33 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   </h3>
                   
                   <SegmentControl<RenderQuality>
-                      label="内太阳系渲染 (Inner System: Mercury - Belt)"
+                      label="内太阳系渲染 (Inner System)"
                       value={settings.renderSettings.innerQuality}
                       onChange={(v) => updateRenderSetting('innerQuality', v)}
                       options={[
-                          { val: 'eco', label: '节能 (Cutoff)' },
+                          { val: 'eco', label: '节能 (Hide)' },
                           { val: 'standard', label: '通用 (Fade)' },
                           { val: 'performance', label: '性能 (Max)' }
                       ]}
                   />
 
                   <SegmentControl<RenderQuality>
-                      label="海外天体渲染 (Outer System: Jupiter+)"
+                      label="海外天体渲染 (TNOs)"
                       value={settings.renderSettings.outerQuality}
                       onChange={(v) => updateRenderSetting('outerQuality', v)}
                       options={[
-                          { val: 'eco', label: '节能 (Cutoff)' },
+                          { val: 'eco', label: '节能 (Hide)' },
+                          { val: 'standard', label: '通用 (Fade)' },
+                          { val: 'performance', label: '性能 (Max)' }
+                      ]}
+                  />
+
+                   <SegmentControl<RenderQuality>
+                      label="彗星与小行星渲染 (Comets & Asteroids)"
+                      value={settings.renderSettings.cometQuality}
+                      onChange={(v) => updateRenderSetting('cometQuality', v)}
+                      options={[
+                          { val: 'eco', label: '节能 (Hide)' },
                           { val: 'standard', label: '通用 (Fade)' },
                           { val: 'performance', label: '性能 (Max)' }
                       ]}

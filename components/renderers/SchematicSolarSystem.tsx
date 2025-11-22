@@ -1,3 +1,5 @@
+
+
 import React, { useEffect, useRef, useMemo, useState } from 'react';
 import { 
   KUIPER_BELT_AU,
@@ -94,7 +96,7 @@ const SchematicSolarSystem: React.FC<SchematicSolarSystemProps> = ({
       }
 
       const proj = project3D(rawPos, AU_SCALE_SCHEMATIC, settings, k, planet.id, centerOfRotation);
-      const renderOpacity = calculateBodyOpacity(planet.id, planet.elements.a, k, settings.renderSettings, false);
+      const renderOpacity = calculateBodyOpacity(planet, k, settings.renderSettings, false);
       const finalOpacity = proj.opacity * renderOpacity;
       newPos[planet.id] = { ...proj, z: proj.depth, raw: rawPos, opacity: finalOpacity, isVisible: proj.isVisible && finalOpacity > getVisibilityThreshold(settings.renderSettings.innerQuality === 'eco') }; 
     });
@@ -288,7 +290,7 @@ const SchematicSolarSystem: React.FC<SchematicSolarSystemProps> = ({
           const pinColor = pinnedState ? pinnedState.color : '#ffffff';
           const baseColor = isSelected ? '#ffffff' : (isPinned ? pinColor : '#333333');
           const opacityMultiplier = (isSelected || isPinned) ? Math.max(0.8, settings.orbitOpacity) : settings.orbitOpacity;
-          const renderQualityOpacity = calculateBodyOpacity(planet.id, planet.elements.a, k, settings.renderSettings, false);
+          const renderQualityOpacity = calculateBodyOpacity(planet, k, settings.renderSettings, false);
 
           if (!settings.enablePerspective) {
              ctx.beginPath();
