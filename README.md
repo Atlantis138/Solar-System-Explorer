@@ -1,4 +1,4 @@
-# 太阳系探索者 (Solar System Explorer V8.0)
+# 太阳系探索者 (Solar System Explorer V9.0)
 
 这是一个基于 React 19、TypeScript 和 D3.js 构建的交互式 2D/2.5D 太阳系模拟应用。它结合了精确的天文算法（Astronomy Engine）与 Google Gemini AI，旨在提供既科学严谨又具有视觉吸引力的天文探索体验。
 
@@ -9,6 +9,7 @@
 *   **AI 增强**：集成 Google Gemini API，提供关于天体的实时问答和搜索接地（Grounding）。
 *   **天象搜寻**：能够计算并预测行星连珠、凌日等罕见天象。
 *   **虚拟漫游**：支持全方位视角的相机控制（偏航/俯仰）和类似 3D 的透视效果。
+*   **自定义天体**：允许用户通过 UI 添加自定义的行星、卫星或小天体。
 
 ## 📂 项目结构
 
@@ -20,90 +21,104 @@ root/
 │   ├── renderers/       # 核心渲染器 (Schematic/TrueScale)
 │   ├── SolarSystem.tsx  # 主画布容器
 │   ├── StarField.tsx    # 星空与银河背景绘制
-│   ├── Controls.tsx     # 时间与播放控制
-│   ├── SettingsPanel.tsx# 设置面板
+│   ├── ObjectManager.tsx# 天体对象管理器 (新增)
 │   └── ...
 ├── core/                # 核心数学引擎
 │   ├── projection.ts    # 3D 到 2D 的正交/透视投影逻辑
 │   └── renderConfig.ts  # 渲染配置与视距剔除逻辑
 ├── data/                # 数据定义
-│   ├── constants.ts     # 物理常数
-│   └── ...
 ├── public/data/         # 外部配置文件
-│   └── solar_system.txt # 自定义天体数据文件
+│   ├── solar_system.txt # 默认天体数据
+│   └── real_stars.json  # 真实恒星数据
 ├── utils/               # 工具函数
 │   ├── astronomy.ts     # 天文算法与轨道计算
-│   └── DataLoader.ts    # 数据文件解析器
-├── hooks/               # 自定义 React Hooks
-│   └── useSimulation.ts # 模拟循环与时间管理
-└── App.tsx              # 应用入口与状态管理
+│   └── DataLoader.ts    # 数据加载与合并
+└── App.tsx              # 应用入口
 ```
 
-## 💾 数据存储架构
+## 💾 数据架构与自定义天体
 
-本项目已将天体数据从代码中解耦，采用自定义的 **Block-based 文本格式** 存储。
+本项目采用灵活的数据加载机制，支持“官方数据”与“用户数据”的运行时合并。
 
-### 数据文件位置
-`public/data/solar_system.txt`
+### 1. 数据来源
+*   **静态文件**：`public/data/solar_system.txt` 包含系统默认的行星定义。
+*   **真实恒星**：`public/data/real_stars.json` 包含视星等较亮的真实恒星数据（RA/Dec）。
+*   **用户存储**：浏览器 `LocalStorage` (`custom_bodies_text`) 存储用户添加的自定义天体。
 
-### 数据格式规范
-数据采用易于阅读和手动编辑的键值对格式。解析器位于 `utils/DataLoader.ts`。
+### 2. 格式规范
+所有天体（无论是默认还是自定义）均采用统一的 **Block-based 文本格式**。
+解析器位于 `utils/DataLoader.ts`。
 
-*   **区块标识**：使用 `[TYPE]` 定义新对象（如 `[PLANET]`, `[SATELLITE]`, `[RING]`）。
-*   **层级关系**：通过 `parent: id` 属性自动构建父子层级（如卫星归属于行星）。
-*   **轨道要素**：使用 J2000 标准的开普勒轨道六要素 (`a e i N w M`)。
-
-**示例：**
+**格式示例：**
 ```text
 [PLANET]
-id: earth
-name: 地球
-elements: 1.000 0.016 0.000 -11.26 102.94 357.51
-
-[SATELLITE]
-parent: earth
-id: moon
-elements: 0.002 0.054 5.145 125.08 318.15 115.37
+id: my_planet
+name: 自定义行星
+englishName: My Planet
+color: #00ff00
+radius: 5
+relativeRadius: 1.0
+elements: 1.52 0.09 1.85 49.5 286.5 19.4
+# elements顺序: a e i N w M
 ```
 
-这种设计使得无需重新编译代码即可添加新的小行星、彗星或调整现有天体参数。
+### 3. 对象管理器 (Object Manager)
+用户可以通过设置面板打开“对象列表”。该管理器 (`ObjectManager.tsx`) 允许：
+*   查看所有已加载天体的状态（是否解析成功）。
+*   **添加自定义天体**：提供模板编辑器，支持行星、矮行星、彗星、卫星和光环的快速定义。
+*   **持久化**：保存的数据会写入 LocalStorage，刷新页面后依然存在。
 
-## 🧊 3D 效果实现原理
+## 🧊 3D 投影与天球背景
 
-虽然本项目使用 HTML5 Canvas/SVG (2D API) 进行渲染，但它通过数学投影实现了完整的 3D 空间模拟。核心逻辑位于 `core/projection.ts`。
+本项目在 2D Canvas 上实现了伪 3D 投影引擎 (`core/projection.ts`)。
 
-### 1. 坐标系定义
-*   **世界坐标 (World Space)**：使用日心笛卡尔坐标系 ($x, y, z$)，单位为天文单位 (AU)。
-*   **坐标手性**：修正后的右手坐标系，+Z 指向屏幕外（或深度），+Y 指向“北方/上方”。
+### 1. 坐标系旋转
+相机位置固定，通过旋转整个世界坐标系来模拟视角变化：
+*   **Yaw (偏航)**：绕 Z 轴旋转 (0° - 360°)。
+*   **Tilt (俯仰)**：绕 X 轴旋转 (-90° 至 +90°)。
+    *   +90°: 北极俯视 (Top-down)
+    *   0°: 黄道面侧视
+    *   -90°: 南极仰视
 
-### 2. 旋转矩阵 (Rotation)
-相机并不真正移动，而是通过旋转世界坐标来模拟视角变化：
-1.  **Yaw (偏航)**：绕 Z 轴旋转，模拟水平旋转。
-2.  **Tilt (俯仰)**：绕 X 轴旋转，模拟从“北极俯视 (+90°)”过渡到“黄道面侧视 (0°)”再到“南极仰视 (-90°)”。
+### 2. 天球背景 (Celestial Sphere)
+背景星空 (`StarField.tsx`) 并非静态图片，而是实时计算的 3D 点集：
+*   **数据源**：赤经 (RA) 和赤纬 (Dec) 数据。
+*   **转换**：
+    1.  将 RA/Dec 转换为单位球上的笛卡尔坐标 $(x, y, z)$。
+    2.  应用与太阳系天体相同的旋转矩阵 (Yaw & Tilt)。
+    3.  投影到屏幕空间。
+这确保了当用户旋转相机查看行星轨道时，背景星空会以正确的角速度同步旋转，提供沉浸式的空间感。
 
-### 3. 投影算法 (Projection)
-将 3D 坐标转换 2D 屏幕坐标：
-*   **正交投影 (Orthographic)**：基础投影，无透视变形。
-    *   $x_{screen} = x_{rotated} \times scale$
-    *   $y_{screen} = -(y_{rotated} \times \sin(Tilt) + z_{rotated} \times \cos(Tilt)) \times scale$
-    *   *注意：这里做了 Y 轴翻转处理，以适配 Canvas 坐标系 (+Y 向下) 与天文坐标系 (+Y 向上) 的差异。*
+## ⚙️ 渲染压力与性能配置
 
-*   **透视模拟 (Perspective Simulation)**：
-    当开启 `enablePerspective` 时，引入深度因子 $w$。
-    *   $scaleFactor = \frac{CameraDistance}{CameraDistance - Depth}$
-    *   该系数用于缩放物体大小和轨道线宽，从而产生“近大远小”的视觉深度感。
+为了兼容不同性能的设备，项目引入了分级渲染策略 (`core/renderConfig.ts`)。
 
-### 4. 深度排序 (Z-Sorting)
-为了正确处理遮挡关系（如行星遮挡轨道，或太阳遮挡行星），渲染器计算每个对象的 `depth` 值，并使用画家算法（Painter's Algorithm），按照深度从远到近的顺序绘制 SVG/Canvas 元素。
+### 渲染质量等级 (Render Quality)
+用户可在设置中针对不同区域（内太阳系、外太阳系、小天体）独立设置质量：
+
+1.  **节能 (Eco)**：
+    *   激进的视距剔除 (Culling)。
+    *   当缩放比例 (Zoom Level) 低于阈值时，天体直接隐藏（opacity = 0）。
+    *   适合移动端或性能较低的设备。
+
+2.  **通用 (Standard)**：
+    *   使用平滑阶梯函数 (`smoothStep`) 计算透明度。
+    *   天体在临界视距处会呈现淡入/淡出效果，视觉体验更佳。
+
+3.  **性能 (Performance)**：
+    *   禁用视距剔除，始终渲染所有可见对象（除非被遮挡）。
+    *   适合桌面端，提供最完整的信息展示。
+
+### 视距逻辑
+系统根据当前的缩放系数 $k$ (Scale Factor) 动态计算每个天体的可见性。例如，在示意图模式下，如果不缩放，柯伊伯带天体默认是不可见的，只有当用户缩放至外太阳系尺度时，它们才会根据设置的策略显现出来。
 
 ## 🛠️ 技术栈
 
 *   **React 19**: UI 构建与状态管理。
 *   **TypeScript**: 类型安全与代码健壮性。
-*   **Tailwind CSS**: 现代化样式设计。
 *   **D3.js**: 处理缩放 (Zoom/Pan) 交互。
 *   **Astronomy Engine**: 提供高精度的星历计算支持。
 *   **Google GenAI SDK**: AI 智能交互。
 
 ---
-*Created by Senior Frontend Engineer*
+*Created by Atlantis*
