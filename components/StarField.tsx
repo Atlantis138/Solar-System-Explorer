@@ -264,7 +264,8 @@ const StarField: React.FC<StarFieldProps> = ({ settings, realStars, constellatio
                       ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(0.8, effectiveOpacity)})`;
                       ctx.font = '10px "Segoe UI", sans-serif';
                       ctx.textAlign = 'left';
-                      ctx.fillText(textToShow, p.x + effectiveSize + 4, p.y + 3);
+                      // Use Math.round for crisp text
+                      ctx.fillText(textToShow, Math.round(p.x + effectiveSize + 4), Math.round(p.y + 3));
                   }
               }
           });
@@ -343,6 +344,59 @@ const StarField: React.FC<StarFieldProps> = ({ settings, realStars, constellatio
                   } else { firstMove = true; }
               }
               ctx.stroke();
+          }
+
+          // --- TEXT LABELS (Optimized) ---
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = color;
+
+          // 1. Grid Coordinate Numbers (Latitudes)
+          // Use explicit font for sharpness
+          ctx.font = '10px "Segoe UI", sans-serif'; 
+          
+          const labelLats = [-60, -30, 30, 60];
+          // Draw labels at cardinal longitudes
+          const labelLons = [0, 90, 180, 270];
+
+          labelLats.forEach(lat => {
+              const latRad = lat * (Math.PI / 180);
+              const r = Math.cos(latRad);
+              const z = Math.sin(latRad);
+              
+              labelLons.forEach(lon => {
+                  const lonRad = lon * (Math.PI / 180);
+                  const x0 = r * Math.cos(lonRad);
+                  const y0 = r * Math.sin(lonRad);
+                  const pt3 = transform(x0, y0, z);
+                  const proj = projectPoint(pt3.x, pt3.y, pt3.z);
+
+                  if (proj.depth < 0) {
+                       // Fix 1: Reset Opacity to be readable
+                       ctx.globalAlpha = 0.8; 
+                       // Fix 2: Integer Coordinate Snapping (avoids subpixel blurring)
+                       ctx.fillText(`${Math.abs(lat)}°`, Math.round(proj.x), Math.round(proj.y));
+                  }
+              });
+          });
+
+          // 2. Pole Labels
+          ctx.font = 'bold 12px "Segoe UI", sans-serif'; 
+          
+          // North
+          const np3 = transform(0, 0, 1);
+          const npProj = projectPoint(np3.x, np3.y, np3.z);
+          if (npProj.depth < 0) {
+               ctx.globalAlpha = 0.9;
+               ctx.fillText("N", Math.round(npProj.x), Math.round(npProj.y));
+          }
+          
+          // South
+          const sp3 = transform(0, 0, -1);
+          const spProj = projectPoint(sp3.x, sp3.y, sp3.z);
+          if (spProj.depth < 0) {
+               ctx.globalAlpha = 0.9;
+               ctx.fillText("S", Math.round(spProj.x), Math.round(spProj.y));
           }
       };
 
