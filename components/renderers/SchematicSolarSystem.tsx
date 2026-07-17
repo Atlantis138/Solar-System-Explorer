@@ -1,6 +1,6 @@
 
 
-import React, { useEffect, useRef, useMemo, useState } from 'react';
+import React, { useLayoutEffect, useRef, useMemo } from 'react';
 import { 
   KUIPER_BELT_AU,
   HELIOPAUSE_AU,
@@ -52,7 +52,6 @@ const SchematicSolarSystem: React.FC<SchematicSolarSystemProps> = ({
   visibilityMap
 }) => {
   const orbitCanvasRef = useRef<HTMLCanvasElement>(null);
-  const [planetPositions, setPlanetPositions] = useState<Record<string, any>>({});
   const k = zoomTransform.k;
 
   const visiblePlanets = useMemo(() => {
@@ -82,7 +81,7 @@ const SchematicSolarSystem: React.FC<SchematicSolarSystemProps> = ({
   const dayDiff = (currentDate.getTime() - J2000_DATE.getTime()) / MILLISECONDS_PER_DAY;
   const baseBeltAngle = dayDiff * (0.214 * Math.PI / 180); 
 
-  useEffect(() => {
+  const planetPositions = useMemo<Record<string, any>>(() => {
     const newPos: Record<string, any> = {};
     visiblePlanets.forEach(planet => {
       // Already filtered by App.tsx, but ensure safety
@@ -103,7 +102,7 @@ const SchematicSolarSystem: React.FC<SchematicSolarSystemProps> = ({
     
     const sunProj = project3D({ x: 0, y: 0, z: 0 }, AU_SCALE_SCHEMATIC, settings, k, 'sun', centerOfRotation);
     newPos['sun'] = { ...sunProj, z: sunProj.depth, raw: {x:0, y:0, z:0}, opacity: 1.0, isVisible: true };
-    setPlanetPositions(newPos);
+    return newPos;
   }, [currentDate, visiblePlanets, settings, k, centerOfRotation, visibilityMap]);
 
   const asteroidOpacity = useMemo(() => {
@@ -119,7 +118,7 @@ const SchematicSolarSystem: React.FC<SchematicSolarSystemProps> = ({
      return 0.5 * (1 - smoothStep(0.4, 0.9, k));
   }, [k, settings]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const canvas = orbitCanvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
