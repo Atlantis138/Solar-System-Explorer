@@ -1,6 +1,6 @@
 
 
-import React, { useEffect, useRef, useMemo, useState } from 'react';
+import React, { useLayoutEffect, useRef, useMemo } from 'react';
 import { 
   AU_SCALE_TRUE, 
   EARTH_RADIUS_TRUE_SCALE_BASE, 
@@ -48,16 +48,6 @@ const TrueScaleSolarSystem: React.FC<TrueScaleSolarSystemProps> = ({
   visibilityMap
 }) => {
   const orbitCanvasRef = useRef<HTMLCanvasElement>(null);
-  const [sceneData, setSceneData] = useState<Array<{
-    id: string, 
-    data: PlanetData | 'sun',
-    pos: any, 
-    rawPos: Position,
-    type: 'star' | 'planet' | 'moon',
-    parentId?: string
-  }>>([]);
-  
-  const sceneDataRef = useRef(sceneData);
   const k = zoomTransform.k;
 
   const visibleBodies = useMemo(() => {
@@ -70,6 +60,54 @@ const TrueScaleSolarSystem: React.FC<TrueScaleSolarSystemProps> = ({
     }
     return list;
   }, [settings.showDwarfPlanets, settings.showAsteroidsComets, planets, dwarfs, asteroidsComets]);
+
+  const sceneData = useMemo<Array<{
+    id: string,
+    data: PlanetData | 'sun',
+    pos: any,
+    rawPos: Position,
+    type: 'star' | 'planet' | 'moon',
+    parentId?: string
+  }>>(() => {
+    const flatList: Array<{
+      id: string,
+      data: PlanetData | 'sun',
+      pos: any,
+      rawPos: Position,
+      type: 'star' | 'planet' | 'moon',
+      parentId?: string
+    }> = [];
+    const sunProj = project3D({ x: 0, y: 0, z: 0 }, AU_SCALE_TRUE, settings, k, 'sun', centerOfRotation);
+    flatList.push({ id: 'sun', data: 'sun', pos: { ...sunProj, z: sunProj.depth }, rawPos: { x: 0, y: 0, z: 0 }, type: 'star' });
+
+    visibleBodies.forEach(planet => {
+      if (visibilityMap[planet.id] === false) return;
+
+      const rawPos = calculateBodyPosition(planet.id, planet.elements, currentDate, settings.useHighPrecision);
+      if ((planet.type === 'comet' || planet.type === 'asteroid')) {
+        const dist = Math.sqrt(rawPos.x**2 + rawPos.y**2 + rawPos.z**2);
+        if (!shouldRenderComet(dist, settings.renderSettings)) return;
+      }
+      const proj = project3D(rawPos, AU_SCALE_TRUE, settings, k, planet.id, centerOfRotation);
+      const renderOpacity = calculateBodyOpacity(planet, k, settings.renderSettings, true);
+      const finalOpacity = proj.opacity * renderOpacity;
+
+      flatList.push({ id: planet.id, data: planet, pos: { ...proj, z: proj.depth, opacity: finalOpacity, isVisible: proj.isVisible && finalOpacity > 0.05 }, rawPos, type: 'planet' });
+
+      if (planet.satellites && planet.satellites.length > 0) {
+        const massMult = planet.massRelativeToSun ? Math.sqrt(planet.massRelativeToSun) : 0;
+        planet.satellites.forEach(moon => {
+          if (visibilityMap[moon.id] === false || moon.isRing || !moon.elements) return;
+
+          const moonAbsPos = calculateSatellitePosition(moon.elements, rawPos, currentDate, massMult, moon.id, settings.useHighPrecision);
+          const moonProj = project3D(moonAbsPos, AU_SCALE_TRUE, settings, k, moon.id, centerOfRotation);
+          flatList.push({ id: moon.id, data: moon, pos: { ...moonProj, z: moonProj.depth }, rawPos: moonAbsPos, type: 'moon', parentId: planet.id });
+        });
+      }
+    });
+
+    return flatList;
+  }, [centerOfRotation, currentDate, k, settings, visibilityMap, visibleBodies]);
 
   const asteroids = useMemo(() => {
     const arr = [];
@@ -93,45 +131,6 @@ const TrueScaleSolarSystem: React.FC<TrueScaleSolarSystemProps> = ({
      if (k > 0.001) return 0; 
      return 0.5 * (1 - smoothStep(0.0002, 0.001, k));
   }, [k, settings]);
-
-  useEffect(() => {
-    const flatList: any[] = [];
-    const sunProj = project3D({ x: 0, y: 0, z: 0 }, AU_SCALE_TRUE, settings, k, 'sun', centerOfRotation);
-    flatList.push({ id: 'sun', data: 'sun', pos: { ...sunProj, z: sunProj.depth }, rawPos: { x: 0, y: 0, z: 0 }, type: 'star' });
-
-    visibleBodies.forEach(planet => {
-      // Already filtered by App.tsx for visibilityMap, but double check just in case
-      if (visibilityMap[planet.id] === false) return;
-
-      const rawPos = calculateBodyPosition(planet.id, planet.elements, currentDate, settings.useHighPrecision);
-      if ((planet.type === 'comet' || planet.type === 'asteroid')) {
-          const dist = Math.sqrt(rawPos.x**2 + rawPos.y**2 + rawPos.z**2);
-          if (!shouldRenderComet(dist, settings.renderSettings)) return;
-      }
-      const proj = project3D(rawPos, AU_SCALE_TRUE, settings, k, planet.id, centerOfRotation);
-      const renderOpacity = calculateBodyOpacity(planet, k, settings.renderSettings, true);
-      const finalOpacity = proj.opacity * renderOpacity;
-
-      flatList.push({ id: planet.id, data: planet, pos: { ...proj, z: proj.depth, opacity: finalOpacity, isVisible: proj.isVisible && finalOpacity > 0.05 }, rawPos: rawPos, type: 'planet' });
-
-      if (planet.satellites && planet.satellites.length > 0) {
-          const massMult = planet.massRelativeToSun ? Math.sqrt(planet.massRelativeToSun) : 0;
-          planet.satellites.forEach(moon => {
-              // CHECK VISIBILITY FOR MOONS HERE
-              if (visibilityMap[moon.id] === false) return;
-
-              if (moon.isRing || !moon.elements) return;
-
-              const moonAbsPos = calculateSatellitePosition(moon.elements, rawPos, currentDate, massMult, moon.id, settings.useHighPrecision);
-              const moonProj = project3D(moonAbsPos, AU_SCALE_TRUE, settings, k, moon.id, centerOfRotation);
-              flatList.push({ id: moon.id, data: moon, pos: { ...moonProj, z: moonProj.depth }, rawPos: moonAbsPos, type: 'moon', parentId: planet.id });
-          });
-      }
-    });
-
-    setSceneData(flatList);
-    sceneDataRef.current = flatList;
-  }, [currentDate, visibleBodies, settings, k, centerOfRotation, visibilityMap]);
 
   const getSystemVisibilityThreshold = (planet: PlanetData): number => {
       if (!planet.satellites || planet.satellites.length === 0) return 10000; 
@@ -157,7 +156,7 @@ const TrueScaleSolarSystem: React.FC<TrueScaleSolarSystemProps> = ({
       return { moonOpacity, orbitOpacity };
   };
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const canvas = orbitCanvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -244,7 +243,7 @@ const TrueScaleSolarSystem: React.FC<TrueScaleSolarSystemProps> = ({
         visibleBodies.forEach(planet => {
             // Already checked visibilityMap above
             if ((planet.type === 'comet' || planet.type === 'asteroid')) {
-                 const item = sceneDataRef.current.find(i => i.id === planet.id);
+                 const item = sceneData.find(i => i.id === planet.id);
                  if (!item || !item.pos.isVisible) return;
             }
             const renderOpacity = calculateBodyOpacity(planet, k, settings.renderSettings, true);
@@ -257,7 +256,7 @@ const TrueScaleSolarSystem: React.FC<TrueScaleSolarSystemProps> = ({
                 const { moonOpacity, orbitOpacity } = calculateOpacities(k, thresholdK);
                 if (orbitOpacity > 0.01) drawOrbit(ctx, planet, { x: 0, y: 0, z: 0 }, planet.id === selectedPlanetId, pinnedPlanets, orbitOpacity * renderOpacity);
                 if (moonOpacity > 0.01) {
-                    const parentItem = sceneDataRef.current.find(i => i.id === planet.id);
+                    const parentItem = sceneData.find(i => i.id === planet.id);
                     const parentRawPos = parentItem ? parentItem.rawPos : null;
                     if (parentRawPos) {
                         planet.satellites.forEach(moon => {
@@ -278,7 +277,7 @@ const TrueScaleSolarSystem: React.FC<TrueScaleSolarSystemProps> = ({
         });
     }
     ctx.restore();
-  }, [visibleBodies, zoomTransform, dimensions, settings, selectedPlanetId, pinnedPlanets, k, centerOfRotation, beltOpacity, visibilityMap]);
+  }, [visibleBodies, zoomTransform, dimensions, settings, selectedPlanetId, pinnedPlanets, k, centerOfRotation, beltOpacity, visibilityMap, sceneData]);
 
   const drawOrbit = (ctx: CanvasRenderingContext2D, body: PlanetData, centerPos: Position, isSelected: boolean, pinnedList: PinnedPlanet[], lodOpacity: number) => {
       if (!body.elements) return;
