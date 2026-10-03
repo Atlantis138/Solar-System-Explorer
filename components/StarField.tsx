@@ -2,8 +2,14 @@
 
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { AppSettings, RealStar, Constellation } from '../types';
+import { sceneLabelStyle, SCENE_FONT_FAMILY } from '../core/sceneLabels';
+import { renderBudget } from '../core/renderBudget';
+import { useCanvasDraw } from '../hooks/useCanvasDraw';
+import { SKY_BRIGHTNESS_BASE } from '../core/skySettings';
+import { equatorialToEcliptic, createSkyProjection, sampleSkyArc, SkyPoint, OBLIQUITY } from '../core/celestial';
 
 interface StarFieldProps {
+  focalPixels?: number;
   settings: AppSettings;
   realStars: RealStar[];
   constellations: Constellation[];
@@ -19,17 +25,15 @@ interface Star {
   id?: string;
 }
 
-const StarField: React.FC<StarFieldProps> = ({ settings, realStars, constellations }) => {
+const StarField: React.FC<StarFieldProps> = ({ settings, realStars, constellations, focalPixels }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [proceduralStars, setProceduralStars] = useState<Star[]>([]);
 
   // --- Procedural Star Generation ---
   useEffect(() => {
-    // Removed the "return if useRealStars" check to allow layering
-    
     const generateStars = () => {
       const newStars: Star[] = [];
-      const count = settings.starDensity; 
+      const count = settings.starDensity;
       const isMilkyWay = settings.background === 'milkyway';
 
       for (let i = 0; i < count; i++) {
@@ -40,12 +44,12 @@ const StarField: React.FC<StarFieldProps> = ({ settings, realStars, constellatio
             // Milky Way Generation
             let lat = 0;
             if (Math.random() < 0.8) {
-                const u1 = Math.random();
+                const u1 = Math.max(Number.EPSILON, Math.random());
                 const u2 = Math.random();
                 const stdNormal = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
-                lat = stdNormal * 0.2; 
+                lat = stdNormal * 0.2;
             } else {
-                lat = (Math.random() - 0.5) * Math.PI; 
+                lat = (Math.random() - 0.5) * Math.PI;
             }
             const lon = Math.random() * Math.PI * 2;
             const x0 = Math.cos(lat) * Math.cos(lon);
@@ -58,7 +62,7 @@ const StarField: React.FC<StarFieldProps> = ({ settings, realStars, constellatio
             x = x0;
             y = y0 * cosInc - z0 * sinInc;
             z = y0 * sinInc + z0 * cosInc;
-            
+
             const distFromCenter = Math.abs(lat);
             size = Math.random() * 1.5 + (distFromCenter < 0.1 ? 0.5 : 0);
             opacity = Math.random() * 0.5 + 0.3 + (distFromCenter < 0.2 ? 0.2 : 0);
@@ -83,335 +87,202 @@ const StarField: React.FC<StarFieldProps> = ({ settings, realStars, constellatio
       setProceduralStars(newStars);
     };
     generateStars();
-  }, [settings.background, settings.starDensity]); // Removed settings.useRealStars dep to keep procedural consistent
+  }, [settings.background, settings.starDensity]);
 
-  // --- Process Real Stars ---
-  const processedRealStars = useMemo(() => {
-    if (!settings.useRealStars || realStars.length === 0) return [];
-    
-    const obliquity = 23.439 * (Math.PI / 180);
-    const cosEps = Math.cos(obliquity);
-    const sinEps = Math.sin(obliquity);
+  // Catalog geometry and arcs are computed only when data changes.
+  const processedRealStars = useMemo(() => realStars.map(star => ({
+    ...star,
+    ...equatorialToEcliptic(star.ra, star.dec),
+    // Compress the photometric range for a readable map, preserving magnitude order.
+    size: Math.max(0.55, 2.5 * Math.pow(10, -0.12 * (star.mag + 1.46))),
+    opacity: Math.min(1, Math.max(0.25, 1 - (star.mag + 1.46) * 0.09)),
+  })).sort((a, b) => a.mag - b.mag), [realStars]);
 
-    return realStars.map(star => {
-        // Convert RA/Dec (Deg) to Radians
-        const alpha = star.ra * (Math.PI / 180);
-        const delta = star.dec * (Math.PI / 180);
+  const constellationGeometry = useMemo(() => {
+    const stars = new Map(processedRealStars.map(star => [star.id, star]));
+    const anchors = new Set<string>();
+    const arcs = constellations.flatMap(constellation => constellation.lines.flatMap(([a, b]) => {
+      const start = stars.get(a), end = stars.get(b);
+      if (!start || !end) return [];
+      anchors.add(a); anchors.add(b);
+      return [sampleSkyArc(start, end)];
+    }));
+    return { anchors, arcs };
+  }, [processedRealStars, constellations]);
 
-        // Equatorial Cartesian (X points to Vernal Equinox)
-        const x_eq = Math.cos(delta) * Math.cos(alpha);
-        const y_eq = Math.cos(delta) * Math.sin(alpha);
-        const z_eq = Math.sin(delta);
+  const regionGeometry = useMemo(() => ({
+    boundaries: constellations.flatMap(c => (c.boundaries ?? []).map(ring =>
+      ring.map(([ra, dec]) => equatorialToEcliptic(ra, dec)))),
+    labels: constellations.flatMap(c => (c.labelPositions ?? []).map(([ra, dec]) => ({
+      point: equatorialToEcliptic(ra, dec), text: c.name.split(' (')[0],
+    }))),
+  }), [constellations]);
 
-        // Rotate to Ecliptic Coordinates
-        const x = x_eq;
-        const y = y_eq * cosEps + z_eq * sinEps;
-        const z = -y_eq * sinEps + z_eq * cosEps;
-
-        // Magnitude to Opacity/Size
-        // Mag -1.5 (Sirius) -> Brightest
-        // Mag 6 -> Dim
-        const normalizedMag = Math.max(0, 2.5 - star.mag) / 3.5; 
-        const opacity = Math.min(1, Math.max(0.3, normalizedMag + 0.2));
-        const size = Math.max(1, normalizedMag * 2.5);
-
-        return {
-            x, y, z,
-            size,
-            opacity,
-            color: star.color || '#ffffff',
-            id: star.id,
-            name: star.name // Carry name for labels
-        } as Star & { name: string };
-    });
-  }, [settings.useRealStars, realStars]);
-
-  // Fast Map for Constellations
-  const starMap = useMemo(() => {
-      if (!settings.showConstellations || !settings.useRealStars) return new Map();
-      const map = new Map<string, Star>();
-      processedRealStars.forEach(s => {
-          if (s.id) map.set(s.id, s);
-      });
-      return map;
-  }, [settings.showConstellations, settings.useRealStars, processedRealStars]);
-
-  // --- Render Loop ---
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const draw = () => {
-      const w = canvas.width = canvas.offsetWidth;
-      const h = canvas.height = canvas.offsetHeight;
-      const centerX = w / 2;
-      const centerY = h / 2;
-      
-      const SKY_SCALE = Math.max(w, h) * 0.8;
-
-      ctx.clearRect(0, 0, w, h);
-
-      const tiltRad = (settings.viewTilt * Math.PI) / 180;
-      const yawRad = (settings.viewYaw * Math.PI) / 180;
-      const sinT = Math.sin(tiltRad);
-      const cosT = Math.cos(tiltRad);
-      const sinY = Math.sin(yawRad);
-      const cosY = Math.cos(yawRad);
-
-      const project = (x: number, y: number, z: number) => {
-          const x_yaw = x * cosY - y * sinY;
-          const y_yaw = x * sinY + y * cosY;
-          const z_yaw = z;
-
-          // Depth calculation consistent with StarField's original logic
-          // depth < 0 means "visible/front" in this specific projection setup (likely due to Z-axis conventions)
-          const depth = z_yaw * sinT - y_yaw * cosT;
-          
-          if (depth >= 0) return null; 
-
-          const x_proj = x_yaw * SKY_SCALE;
-          const y_proj = -(y_yaw * sinT + z_yaw * cosT) * SKY_SCALE;
-
-          return { x: centerX + x_proj, y: centerY + y_proj };
-      };
-
-      // --- Layer 0: Procedural Background Stars ---
-      // These are drawn with the global `starBrightness` setting.
-      // They provide context/atmosphere.
-      proceduralStars.forEach(star => {
-          const p = project(star.x, star.y, star.z);
-          if (!p) return;
-
-          let alpha = star.opacity * settings.starBrightness;
-          // Slight Milky Way boost
-          if (settings.background === 'milkyway') alpha *= 1;
-          else alpha *= 0.8;
-
-          ctx.fillStyle = `${star.color}${alpha})`;
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, star.size, 0, Math.PI * 2);
-          ctx.fill();
-      });
-      
-      // --- Layer 1: Constellation Lines ---
-      if (settings.useRealStars && settings.showConstellations) {
-          ctx.lineWidth = 0.8;
-          // Use dedicated Constellation brightness multiplier
-          const lineAlpha = 0.15 * settings.constellationBrightnessMultiplier;
-          ctx.strokeStyle = `rgba(255, 255, 255, ${Math.min(1, lineAlpha)})`;
-          ctx.beginPath();
-          
-          constellations.forEach(constellation => {
-              constellation.lines.forEach(pair => {
-                  const s1 = starMap.get(pair[0]);
-                  const s2 = starMap.get(pair[1]);
-                  
-                  if (s1 && s2) {
-                      const p1 = project(s1.x, s1.y, s1.z);
-                      const p2 = project(s2.x, s2.y, s2.z);
-                      
-                      if (p1 && p2) {
-                          ctx.moveTo(p1.x, p1.y);
-                          ctx.lineTo(p2.x, p2.y);
-                      }
-                  }
-              });
-          });
-          ctx.stroke();
-      }
-
-      // --- Layer 2: Real Stars ---
-      if (settings.useRealStars) {
-          processedRealStars.forEach(star => {
-              const p = project(star.x, star.y, star.z);
-              if (!p) return;
-
-              // Apply Real Star Brightness Multiplier
-              // Base opacity comes from Magnitude. Multiplier boosts it.
-              // Allow going > 1.0 for glow effect simulation logic (though canvas alpha caps at 1)
-              const brightnessMult = settings.realStarBrightnessMultiplier;
-              let effectiveOpacity = star.opacity * brightnessMult;
-              
-              // Scale size slightly with brightness to simulate bloom
-              let effectiveSize = star.size * Math.sqrt(brightnessMult);
-
-              ctx.globalAlpha = Math.min(1, effectiveOpacity);
-              ctx.fillStyle = star.color;
-              
-              ctx.beginPath();
-              ctx.arc(p.x, p.y, effectiveSize, 0, Math.PI * 2);
-              ctx.fill();
-
-              // --- Layer 3: Star Labels ---
-              if (settings.realStarLabels !== 'none') {
-                  // Only label reasonably bright stars unless brightness is pumped up
-                  if (effectiveOpacity > 0.3) {
-                      const label = (star as any).name;
-                      const id = star.id; // We can use ID for english if needed, or add englishName to json
-                      
-                      // Determine text to show
-                      let textToShow = '';
-                      if (settings.realStarLabels === 'cn') {
-                          textToShow = label;
-                      } else if (settings.realStarLabels === 'bilingual') {
-                          // Simple capitalization for ID as "English" fallback since we don't have separate EN name yet
-                          const enName = id.charAt(0).toUpperCase() + id.slice(1);
-                          textToShow = `${label} ${enName}`;
-                      }
-
-                      ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(0.8, effectiveOpacity)})`;
-                      ctx.font = '10px "Segoe UI", sans-serif';
-                      ctx.textAlign = 'left';
-                      // Use Math.round for crisp text
-                      ctx.fillText(textToShow, Math.round(p.x + effectiveSize + 4), Math.round(p.y + 3));
-                  }
-              }
-          });
-          ctx.globalAlpha = 1.0; // Reset
-      }
-
-      // --- Layer 4: Grids ---
-      const projectPoint = (x: number, y: number, z: number) => {
-          const x_yaw = x * cosY - y * sinY;
-          const y_yaw = x * sinY + y * cosY;
-          const z_yaw = z;
-          const depth = z_yaw * sinT - y_yaw * cosT;
-          const x_p = x_yaw * SKY_SCALE;
-          const y_p = -(y_yaw * sinT + z_yaw * cosT) * SKY_SCALE;
-          return { x: centerX + x_p, y: centerY + y_p, depth };
-      };
-
-      const drawGrid = (tiltAngleDeg: number, color: string, labelSuffix: string) => {
-          const gridRad = tiltAngleDeg * (Math.PI / 180);
-          const cosGrid = Math.cos(gridRad);
-          const sinGrid = Math.sin(gridRad);
-          
-          const transform = (x: number, y: number, z: number) => {
-              const y_t = y * cosGrid - z * sinGrid;
-              const z_t = y * sinGrid + z * cosGrid;
-              return { x: x, y: y_t, z: z_t };
-          };
-
-          ctx.lineWidth = 1.2;
-          ctx.strokeStyle = color;
-          ctx.globalAlpha = settings.gridOpacity;
-
-          // Latitudes
-          const lats = [-60, -30, 0, 30, 60];
-          if (!settings.convergeMeridians) { lats.push(-80); lats.push(80); }
-          
-          lats.forEach(lat => {
-              ctx.beginPath();
-              const latRad = lat * (Math.PI / 180);
-              const r = Math.cos(latRad);
-              const z = Math.sin(latRad);
-              let firstMove = true;
-              for (let lon = 0; lon <= 360; lon += 5) {
-                  const lonRad = lon * (Math.PI / 180);
-                  const x0 = r * Math.cos(lonRad);
-                  const y0 = r * Math.sin(lonRad);
-                  const pt3 = transform(x0, y0, z);
-                  const proj = projectPoint(pt3.x, pt3.y, pt3.z);
-                  if (proj.depth < 0) {
-                      if (firstMove) { ctx.moveTo(proj.x, proj.y); firstMove = false; }
-                      else { ctx.lineTo(proj.x, proj.y); }
-                  } else { firstMove = true; }
-              }
-              ctx.stroke();
-          });
-
-          // Longitudes
-          for (let lon = 0; lon < 360; lon += 30) {
-              ctx.beginPath();
-              const lonRad = lon * (Math.PI / 180);
-              const cosL = Math.cos(lonRad);
-              const sinL = Math.sin(lonRad);
-              const latMax = settings.convergeMeridians ? 90 : 80;
-              let firstMove = true;
-              for (let lat = -latMax; lat <= latMax; lat += 5) {
-                  const latRad = lat * (Math.PI / 180);
-                  const r = Math.cos(latRad);
-                  const z = Math.sin(latRad);
-                  const x0 = r * cosL;
-                  const y0 = r * sinL;
-                  const pt3 = transform(x0, y0, z);
-                  const proj = projectPoint(pt3.x, pt3.y, pt3.z);
-                  if (proj.depth < 0) {
-                      if (firstMove) { ctx.moveTo(proj.x, proj.y); firstMove = false; }
-                      else { ctx.lineTo(proj.x, proj.y); }
-                  } else { firstMove = true; }
-              }
-              ctx.stroke();
-          }
-
-          // --- TEXT LABELS (Optimized) ---
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillStyle = color;
-
-          // 1. Grid Coordinate Numbers (Latitudes)
-          // Use explicit font for sharpness
-          ctx.font = '10px "Segoe UI", sans-serif'; 
-          
-          const labelLats = [-60, -30, 30, 60];
-          // Draw labels at cardinal longitudes
-          const labelLons = [0, 90, 180, 270];
-
-          labelLats.forEach(lat => {
-              const latRad = lat * (Math.PI / 180);
-              const r = Math.cos(latRad);
-              const z = Math.sin(latRad);
-              
-              labelLons.forEach(lon => {
-                  const lonRad = lon * (Math.PI / 180);
-                  const x0 = r * Math.cos(lonRad);
-                  const y0 = r * Math.sin(lonRad);
-                  const pt3 = transform(x0, y0, z);
-                  const proj = projectPoint(pt3.x, pt3.y, pt3.z);
-
-                  if (proj.depth < 0) {
-                       // Fix 1: Reset Opacity to be readable
-                       ctx.globalAlpha = 0.8; 
-                       // Fix 2: Integer Coordinate Snapping (avoids subpixel blurring)
-                       ctx.fillText(`${Math.abs(lat)}°`, Math.round(proj.x), Math.round(proj.y));
-                  }
-              });
-          });
-
-          // 2. Pole Labels
-          ctx.font = 'bold 12px "Segoe UI", sans-serif'; 
-          
-          // North
-          const np3 = transform(0, 0, 1);
-          const npProj = projectPoint(np3.x, np3.y, np3.z);
-          if (npProj.depth < 0) {
-               ctx.globalAlpha = 0.9;
-               ctx.fillText("N", Math.round(npProj.x), Math.round(npProj.y));
-          }
-          
-          // South
-          const sp3 = transform(0, 0, -1);
-          const spProj = projectPoint(sp3.x, sp3.y, sp3.z);
-          if (spProj.depth < 0) {
-               ctx.globalAlpha = 0.9;
-               ctx.fillText("S", Math.round(spProj.x), Math.round(spProj.y));
-          }
-      };
-
-      if (settings.showEclipticGrid) drawGrid(0, '#FACC15', 'ecl');
-      if (settings.showEquatorialGrid) drawGrid(23.44, '#22D3EE', 'eq');
+  // Grid geometry and label measurements stay cached while rotating the view.
+  const grids = useMemo(() => [0, -OBLIQUITY].map(tilt => {
+    const angle = tilt * Math.PI / 180;
+    const point = (lon: number, lat: number): SkyPoint => {
+      const l = lon * Math.PI / 180, b = lat * Math.PI / 180;
+      const y = Math.cos(b) * Math.sin(l), z = Math.sin(b);
+      return { x: Math.cos(b) * Math.cos(l), y: y * Math.cos(angle) - z * Math.sin(angle),
+        z: y * Math.sin(angle) + z * Math.cos(angle) };
     };
+    const paths: SkyPoint[][] = [];
+    const latitudes = settings.convergeMeridians ? [-60, -30, 0, 30, 60] : [-80, -60, -30, 0, 30, 60, 80];
+    for (const lat of latitudes) paths.push(Array.from({ length: 181 }, (_, i) => point(i * 2, lat)));
+    const max = settings.convergeMeridians ? 90 : 80;
+    for (let lon = 0; lon < 360; lon += 30)
+      paths.push(Array.from({ length: max + 1 }, (_, i) => point(lon, -max + i * 2)));
+    const labels = [-60, -30, 30, 60].flatMap(lat => [0, 90, 180, 270].map(lon => ({
+      point: point(lon, lat), text: `${Math.abs(lat)}°`,
+    })));
+    labels.push({ point: point(0, 90), text: 'N' }, { point: point(0, -90), text: 'S' });
+    return { paths, labels };
+  }), [settings.convergeMeridians]);
+  const textWidths = useRef(new Map<string, number>());
+  useEffect(() => {
+    const clear = () => textWidths.current.clear();
+    document.fonts?.addEventListener('loadingdone', clear);
+    return () => document.fonts?.removeEventListener('loadingdone', clear);
+  }, []);
 
-    draw();
-    const handleResize = () => draw();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+  // Same pre-paint phase as the foreground: no trailing background frame.
+  useCanvasDraw(canvasRef, (ctx, w, h) => {
+    const projection = createSkyProjection(w, h, settings.viewTilt, settings.viewYaw, focalPixels);
+    const inViewport = (p: { x: number; y: number }, margin = 8) =>
+      p.x >= -margin && p.x <= w + margin && p.y >= -margin && p.y <= h + margin;
+    const drawPaths = (paths: SkyPoint[][]) => {
+      ctx.beginPath();
+      for (const path of paths) for (let i = 1; i < path.length; i++) {
+        const segment = projection.segment(path[i - 1], path[i]);
+        if (segment) {
+          ctx.moveTo(segment[0].x, segment[0].y);
+          ctx.lineTo(segment[1].x, segment[1].y);
+        }
+      }
+      ctx.stroke();
+    };
+    const labels: { x: number; y: number; radius: number; text: string }[] = [];
+    if (!settings.useRealStars) for (const star of proceduralStars) {
+      const p = projection(star);
+      if (p.depth >= 0 || !inViewport(p)) continue;
+      ctx.fillStyle = `${star.color}${Math.min(1, star.opacity * settings.starBrightness * SKY_BRIGHTNESS_BASE.starBrightness * 0.65)})`;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, star.size * 0.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (settings.useRealStars && settings.showConstellationBoundaries) {
+      ctx.globalAlpha = 1;
+      ctx.lineWidth = 0.6;
+      ctx.strokeStyle = 'rgba(140, 151, 191, 0.12)';
+      drawPaths(regionGeometry.boundaries);
+    }
+    // Large, quiet sky-region lettering sits behind stars and their foreground labels.
+    if (settings.useRealStars && settings.showConstellationNames) {
+      ctx.save();
+      const fontSize = sceneLabelStyle('constellation',Math.min(w,h)).fontSize;
+      ctx.font = `300 ${fontSize}px "Segoe UI", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#94a1bb';
+      const regionBoxes: { x: number; y: number; w: number; h: number }[] = [];
+      for (const label of regionGeometry.labels) {
+        const p = projection(label.point);
+        if (p.depth >= 0 || !inViewport(p, -16)) continue;
+        const key = `region:${fontSize}:${label.text}`;
+        let width = textWidths.current.get(key);
+        if (width === undefined) {
+          width = ctx.measureText(label.text).width;
+          textWidths.current.set(key, width);
+        }
+        const box = { x: p.x - width / 2 - 8, y: p.y - fontSize / 2 - 6, w: width + 16, h: fontSize + 12 };
+        const edge = Math.min(box.x, box.y, w - box.x - box.w, h - box.y - box.h);
+        if (edge <= 0 || regionBoxes.some(other => box.x < other.x + other.w && box.x + box.w > other.x &&
+            box.y < other.y + other.h && box.y + box.h > other.y)) continue;
+        ctx.globalAlpha = 0.16 * Math.min(1, edge / 32);
+        ctx.fillText(label.text, p.x - width / 2, p.y);
+        regionBoxes.push(box);
+      }
+      ctx.restore();
+    }
+    if (settings.useRealStars && settings.showConstellations) {
+      ctx.lineWidth = 0.7;
+      ctx.strokeStyle = `rgba(145, 163, 192, ${Math.min(0.6, 0.18 * settings.constellationBrightnessMultiplier * SKY_BRIGHTNESS_BASE.constellationBrightnessMultiplier)})`;
+      drawPaths(constellationGeometry.arcs);
+    }
+    if (settings.useRealStars) {
+      const limit = settings.realStarMagnitudeLimit;
+      const multiplier = settings.realStarBrightnessMultiplier * SKY_BRIGHTNESS_BASE.realStarBrightnessMultiplier;
+      for (const star of processedRealStars) {
+        const anchor = settings.showConstellations && constellationGeometry.anchors.has(star.id);
+        if (star.mag > limit && !anchor) continue;
+        const p = projection(star);
+        if (p.depth >= 0 || !inViewport(p)) continue;
+        // Keep small stars sharp at every brightness; dim their light, not their radius.
+        const radius = star.size * 0.85;
+        ctx.globalAlpha = Math.min(1, star.opacity * multiplier * 0.8);
+        ctx.fillStyle = star.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+        if (settings.realStarLabels !== 'none' && star.mag <= Math.min(2.5, limit)) {
+          const text = settings.realStarLabels === 'cn' ? star.name
+            : [star.name, star.englishName].filter(Boolean).join(' ');
+          if (text) labels.push({ ...p, radius, text });
+        }
+      }
+    }
+    ctx.font = `${sceneLabelStyle('grid').fontSize}px ${SCENE_FONT_FAMILY}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (let i = 0; i < grids.length; i++) {
+      if (!(i === 0 ? settings.showEclipticGrid : settings.showEquatorialGrid)) continue;
+      ctx.lineWidth = 0.7;
+      ctx.strokeStyle = ctx.fillStyle = i === 0 ? '#b8a862' : '#699eac';
+      ctx.globalAlpha = Math.min(1, settings.gridOpacity * SKY_BRIGHTNESS_BASE.gridOpacity);
+      drawPaths(grids[i].paths);
+      // Coordinate labels obey the same dimmer as their grid.
+      for (const label of grids[i].labels) {
+        const p = projection(label.point);
+        if (p.depth < 0 && inViewport(p, -12)) ctx.fillText(label.text, p.x, p.y);
+      }
+    }
+    ctx.font = `${sceneLabelStyle('star').fontSize}px ${SCENE_FONT_FAMILY}`;
+    ctx.textAlign = 'left';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#020306';
+    ctx.fillStyle = '#b8c4d6';
+    const occupied: { x: number; y: number; w: number; h: number }[] = [];
+    let starLabelCount = 0;
+    for (const label of labels) {
+      if (starLabelCount >= 14) break;
+      let width = textWidths.current.get(label.text);
+      if (width === undefined) {
+        width = ctx.measureText(label.text).width;
+        textWidths.current.set(label.text, width);
+      }
+      // A stable offset avoids labels jumping sides during a rotation. Keep
+      // fractional positions: the DPR backing store supplies the sharpness.
+      const x = label.x + label.radius + 6, y = label.y;
+      const box = { x: x - 3, y: y - 10, w: width + 6, h: 20 };
+      const edge = Math.min(box.x, box.y, w - box.x - box.w, h - box.y - box.h);
+      if (edge <= 0 || occupied.some(other => box.x < other.x + other.w && box.x + box.w > other.x &&
+          box.y < other.y + other.h && box.y + box.h > other.y)) continue;
+      ctx.globalAlpha = Math.min(1, settings.starLabelBrightness * SKY_BRIGHTNESS_BASE.starLabelBrightness) * Math.min(1, edge / 24);
+      ctx.strokeText(label.text, x, y);
+      ctx.fillText(label.text, x, y);
+      occupied.push(box);
+      starLabelCount++;
+    }
+  }, [focalPixels, proceduralStars, processedRealStars, constellationGeometry, regionGeometry, grids,
+    settings.viewTilt, settings.viewYaw, settings.useRealStars, settings.starBrightness,
+    settings.realStarMagnitudeLimit, settings.realStarBrightnessMultiplier, settings.realStarLabels,
+    settings.starLabelBrightness, settings.showConstellations, settings.constellationBrightnessMultiplier,
+    settings.showEclipticGrid, settings.showEquatorialGrid, settings.gridOpacity,
+    settings.showConstellationNames, settings.showConstellationBoundaries], renderBudget(settings.renderSettings).maxDpr);
 
-  }, [proceduralStars, processedRealStars, constellations, settings, starMap]);
-
-  return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />;
+  return <canvas ref={canvasRef} role="img" aria-label="天球星图" className="absolute inset-0 w-full h-full pointer-events-none" />;
 };
 
-export default StarField;
+export default React.memo(StarField);

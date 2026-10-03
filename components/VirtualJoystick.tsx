@@ -1,5 +1,5 @@
 
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useLayoutEffect } from 'react';
 
 interface VirtualJoystickProps {
   onUpdate: (dYaw: number, dTilt: number) => void;
@@ -28,75 +28,56 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({
   const startPosRef = useRef({ x: 0, y: 0 });
   const lastPosRef = useRef({ x: 0, y: 0 });
   
-  const MAX_RADIUS = 40; // px
-  const SENSITIVITY = 0.5; // deg per px
+  const pointerRef = useRef<number | null>(null);
+  const frameRef = useRef(0);
+  const pendingRef = useRef({ yaw: 0, tilt: 0 });
+  const onUpdateRef = useRef(onUpdate);
+  useLayoutEffect(() => { onUpdateRef.current = onUpdate; }, [onUpdate]);
+  useEffect(() => () => cancelAnimationFrame(frameRef.current), []);
 
-  // Pointer Down: Start Tracking
-  const handlePointerDown = (e: React.PointerEvent) => {
+  const flushMovement = () => {
+    cancelAnimationFrame(frameRef.current);
+    frameRef.current = 0;
+    const { yaw, tilt } = pendingRef.current;
+    pendingRef.current = { yaw: 0, tilt: 0 };
+    if (yaw || tilt) onUpdateRef.current(yaw, tilt);
+  };
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (pointerRef.current !== null || e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
-    
-    startPosRef.current = { x: e.clientX, y: e.clientY };
-    lastPosRef.current = { x: e.clientX, y: e.clientY };
+    pointerRef.current = e.pointerId;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    startPosRef.current = lastPosRef.current = { x: e.clientX, y: e.clientY };
     setActive(true);
   };
-
-  const handleGlobalMove = useCallback((e: PointerEvent) => {
-    if (!active) return;
-    
-    const currentX = e.clientX;
-    const currentY = e.clientY;
-
-    // 1. Calculate Delta for Output (Yaw/Tilt Change)
-    const dx = currentX - lastPosRef.current.x;
-    const dy = currentY - lastPosRef.current.y;
-    
-    onUpdate(dx * SENSITIVITY, dy * SENSITIVITY);
-    
-    lastPosRef.current = { x: currentX, y: currentY };
-
-    // 2. Calculate Knob Visual Position (Relative to Start)
-    let vecX = currentX - startPosRef.current.x;
-    let vecY = currentY - startPosRef.current.y;
-    
-    // Clamp magnitude
-    const dist = Math.sqrt(vecX * vecX + vecY * vecY);
-    if (dist > MAX_RADIUS) {
-        const scale = MAX_RADIUS / dist;
-        vecX *= scale;
-        vecY *= scale;
-    }
-
-    setKnobPos({ x: vecX, y: vecY });
-  }, [active, onUpdate]);
-
-  const handleGlobalUp = useCallback(() => {
-    if (!active) return;
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (pointerRef.current !== e.pointerId) return;
+    pendingRef.current.yaw += (e.clientX - lastPosRef.current.x) * 0.5;
+    pendingRef.current.tilt += (e.clientY - lastPosRef.current.y) * 0.5;
+    lastPosRef.current = { x: e.clientX, y: e.clientY };
+    // High-rate mouse/touch input shares one camera update per display frame.
+    if (!frameRef.current) frameRef.current = requestAnimationFrame(() => {
+      flushMovement();
+      const x = lastPosRef.current.x - startPosRef.current.x;
+      const y = lastPosRef.current.y - startPosRef.current.y;
+      const scale = Math.min(1, 40 / (Math.hypot(x, y) || 1));
+      setKnobPos({ x: x * scale, y: y * scale });
+    });
+  };
+  const handlePointerEnd = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (pointerRef.current !== e.pointerId) return;
+    // Preserve the last delta, including a release between animation frames.
+    flushMovement();
+    pointerRef.current = null;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
     setActive(false);
     setKnobPos({ x: 0, y: 0 });
-  }, [active]);
-
-  // Attach global listeners when active
-  useEffect(() => {
-    if (active) {
-      window.addEventListener('pointermove', handleGlobalMove);
-      window.addEventListener('pointerup', handleGlobalUp);
-      window.addEventListener('pointercancel', handleGlobalUp);
-    } else {
-      window.removeEventListener('pointermove', handleGlobalMove);
-      window.removeEventListener('pointerup', handleGlobalUp);
-      window.removeEventListener('pointercancel', handleGlobalUp);
-    }
-    return () => {
-      window.removeEventListener('pointermove', handleGlobalMove);
-      window.removeEventListener('pointerup', handleGlobalUp);
-      window.removeEventListener('pointercancel', handleGlobalUp);
-    };
-  }, [active, handleGlobalMove, handleGlobalUp]);
+  };
 
   return (
     <div 
-      className="fixed bottom-32 right-16 z-30 flex flex-col items-center gap-3 pointer-events-auto transition-opacity duration-300 ease-in-out"
+      className="fixed bottom-40 sm:bottom-32 right-6 sm:right-16 z-30 flex flex-col items-center gap-3 pointer-events-auto transition-opacity duration-300 ease-in-out"
     >
       
       <div className="flex items-center gap-2">
@@ -106,7 +87,9 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({
            <button
               onClick={onToggleProximity}
               className={`p-2 rounded-full border backdrop-blur-md transition-all shadow-lg relative group ${isProximityEnabled ? 'bg-green-600/80 border-green-400 text-white' : 'bg-gray-800/60 border-white/20 text-white/70 hover:text-white hover:bg-green-600/60'}`}
-              title="Toggle Proximity Simulation (Fly-through)"
+              title="近景透视：缩放时模拟相机靠近或远离"
+              aria-label="近景透视"
+              aria-pressed={isProximityEnabled}
            >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -115,7 +98,7 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({
               </svg>
               {/* Tooltip */}
               <div className="absolute bottom-full right-0 mb-2 w-32 p-2 bg-gray-900 text-[10px] text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none border border-gray-700">
-                  Simulates physical camera. Zoom to fly through.
+                  近景透视：缩放时模拟相机靠近或远离天体。
               </div>
            </button>
         )}
@@ -150,7 +133,12 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({
       <div 
         ref={containerRef}
         className={`w-24 h-24 rounded-full bg-gray-900/40 backdrop-blur-md border border-white/10 flex items-center justify-center shadow-2xl touch-none transition-colors ${active ? 'border-white/30' : ''}`}
+        aria-label="拖动旋转视角"
         onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerEnd}
+        onPointerCancel={handlePointerEnd}
+        onLostPointerCapture={handlePointerEnd}
       >
         {/* Stick/Knob */}
         <div 

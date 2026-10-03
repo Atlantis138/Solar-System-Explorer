@@ -10,10 +10,12 @@ import { VirtualJoystick } from './components/VirtualJoystick';
 import PinnedPlanetsSidebar from './components/PinnedPlanetsSidebar';
 import { PlanetData, AppSettings, PinnedPlanet, RealStar, Constellation } from './types';
 import { MILLISECONDS_PER_DAY } from './data/constants';
-import { DEFAULT_SUN_ANGULAR_RADIUS_DEG, calculateBodyPosition } from './utils/astronomy';
+import { DEFAULT_SUN_ANGULAR_RADIUS_DEG, calculateWorldPosition } from './utils/astronomy';
 import { useSimulation } from './hooks/useSimulation';
 import { loadSolarSystemData } from './utils/DataLoader';
 import { SYSTEM_DEFAULTS } from './data/default_settings';
+import { migrateSkySettings } from './core/skySettings';
+import { migrateCameraSettings } from './core/cameraSettings';
 
 const App: React.FC = () => {
   // --- Data State ---
@@ -81,7 +83,7 @@ const App: React.FC = () => {
   // --- Helper: Calculate Initial Yaw for Earth-at-Bottom (Standard Orientation) ---
   const calculateSmartYaw = useCallback((date: Date, earthData?: PlanetData) => {
       if (!earthData) return 0;
-      const earthPos = calculateBodyPosition('earth', earthData.elements, date, false);
+      const earthPos = calculateWorldPosition('earth', [earthData], date, false);
       const angleRad = Math.atan2(earthPos.y, earthPos.x);
       const angleDeg = angleRad * (180 / Math.PI);
       
@@ -107,11 +109,12 @@ const App: React.FC = () => {
     try {
       const saved = localStorage.getItem('user_settings');
       if (saved) {
-        const parsed = JSON.parse(saved);
+        const parsed = migrateCameraSettings(migrateSkySettings(JSON.parse(saved)));
         // Deep merge to ensure renderSettings structure is preserved if new keys are added to defaults later
         return {
           ...SYSTEM_DEFAULTS,
           ...parsed,
+          orbitCategoryOpacity: { ...SYSTEM_DEFAULTS.orbitCategoryOpacity, ...(parsed.orbitCategoryOpacity || {}) },
           renderSettings: { ...SYSTEM_DEFAULTS.renderSettings, ...(parsed.renderSettings || {}) }
         };
       }
@@ -186,6 +189,14 @@ const App: React.FC = () => {
       }
   }, [sim.searchState.active, sim.searchState.isCalculating, sim.searchState.foundEvents.length]);
 
+  useEffect(() => {
+    if (!settings.useHighPrecision) {
+      setShowEvents(false);
+      setShowHistorySidebar(false);
+      setIsEventsPanelPinned(false);
+    }
+  }, [settings.useHighPrecision]);
+
   const handleTogglePin = (id: string) => {
       setPinnedPlanets(prev => {
           const exists = prev.find(p => p.id === id);
@@ -212,11 +223,21 @@ const App: React.FC = () => {
   };
 
   const handleToggleFollow = (id: string) => {
+      if (id.startsWith('barycenter:')) {
+        if (!settings.trueScale) return;
+        setSelectedPlanet(null);
+        if (cameraFocusId === id) setResetCameraFlag(value => value + 1);
+      }
       setCameraFocusId(prev => prev === id ? null : id);
   };
 
+  // Leaving physical scale also leaves the system-only camera target.
+  useEffect(() => {
+    if (!settings.trueScale) setCameraFocusId(id => id?.startsWith('barycenter:') ? id.slice(11) : id);
+  }, [settings.trueScale]);
+
   const handleCloseInfoPanel = () => {
-      if (cameraFocusId === selectedPlanet?.id) setCameraFocusId(null);
+      // Closing information should not move the camera away from a close-up target.
       setSelectedPlanet(null);
   };
 
@@ -336,19 +357,20 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [sim.searchState, settings.continuousIteration]);
 
+  const renderPlanets = useMemo(() => celestialData?.planets ?? [], [celestialData]);
+
+  const renderDwarfs = useMemo(() => celestialData?.dwarfs.filter(p => visibilityMap[p.id] !== false) ?? [], [celestialData, visibilityMap]);
+
+  const renderAsteroids = useMemo(() => celestialData?.asteroidsComets.filter(p => visibilityMap[p.id] !== false) ?? [], [celestialData, visibilityMap]);
+
   if (loading || !celestialData) {
       return <div className="w-screen h-screen bg-black flex items-center justify-center text-white">Loading Solar System Data...</div>;
   }
 
   // Sidebar Split View Logic
-  const isHistorySidebarVisible = !!(showHistorySidebar && (sim.searchState.foundEvents.length > 0 || sim.searchState.active || sim.searchState.isCalculating || sim.searchState.completed));
+  const isHistorySidebarVisible = settings.useHighPrecision && !!(showHistorySidebar && (sim.searchState.foundEvents.length > 0 || sim.searchState.active || sim.searchState.isCalculating || sim.searchState.completed));
   const isPinnedSidebarVisible = pinnedPlanets.length > 0;
   const isSplitView = isHistorySidebarVisible && isPinnedSidebarVisible;
-
-  // Filter Visible Objects for Renderers (Top Level)
-  const renderPlanets = celestialData.planets.filter(p => visibilityMap[p.id] !== false);
-  const renderDwarfs = celestialData.dwarfs.filter(p => visibilityMap[p.id] !== false);
-  const renderAsteroids = celestialData.asteroidsComets.filter(p => visibilityMap[p.id] !== false);
 
   return (
     <div className="w-screen h-screen bg-black text-white overflow-hidden flex relative select-none">
@@ -377,13 +399,6 @@ const App: React.FC = () => {
         realStars={realStars}
         constellations={constellations}
       />
-
-      <div className="absolute top-6 left-8 pointer-events-none z-10">
-        <h1 className="text-4xl font-bold tracking-tighter bg-gradient-to-br from-white to-gray-500 bg-clip-text text-transparent">
-          SOLAR SYSTEM
-        </h1>
-        <p className="text-sm text-gray-400 tracking-widest uppercase mt-1">Interactive Explorer // 交互式探索</p>
-      </div>
 
       {settings.showCameraControl && (
           <VirtualJoystick 
@@ -426,6 +441,7 @@ const App: React.FC = () => {
           sim.resetSearchForm();
         }}
         onOpenSettings={() => setShowSettings(true)}
+        searchEnabled={settings.useHighPrecision}
         onOpenEvents={() => {
           setShowEvents(true);
           setIsEventsPanelPinned(true); // Automatically pin on open
@@ -449,7 +465,7 @@ const App: React.FC = () => {
         />
       )}
 
-      {showEvents && (
+      {settings.useHighPrecision && showEvents && (
         <EventsPanel 
           searchState={sim.searchState}
           onSearch={(t, ids, s, strict, c) => sim.startSearch(t, ids, s, strict || false, c, false)} 
@@ -513,6 +529,10 @@ const App: React.FC = () => {
           isPinned={pinnedPlanets.some(p => p.id === selectedPlanet.id)}
           onToggleFollow={handleToggleFollow}
           isFollowing={cameraFocusId === selectedPlanet.id}
+          currentDate={sim.currentDate}
+          useHighPrecision={settings.useHighPrecision}
+          trueScale={settings.trueScale}
+          isFollowingSystem={cameraFocusId === `barycenter:${selectedPlanet.id}`}
           allBodies={allBodies}
         />
       )}

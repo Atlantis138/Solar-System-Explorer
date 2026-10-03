@@ -42,7 +42,7 @@ const PinnedPlanetsSidebar: React.FC<PinnedPlanetsSidebarProps> = ({
 
   if (pinnedPlanets.length === 0) return null;
 
-  const getPlanetData = (id: string) => allBodies.find(x => x.id === id);
+  const getPlanetData = (id: string) => allBodies.find(x => x.id === id) ?? allBodies.flatMap(p => p.satellites ?? []).find(x => x.id === id);
   const toggleExpand = (id: string) => {
       setExpandedIds(prev => {
           const next = new Set(prev);

@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local experiments, browser captures and publishing workspaces
+/work/

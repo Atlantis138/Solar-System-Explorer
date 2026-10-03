@@ -1,24 +1,29 @@
-
-
-import React, { useLayoutEffect, useRef, useMemo } from 'react';
-import { 
-  AU_SCALE_TRUE, 
-  EARTH_RADIUS_TRUE_SCALE_BASE, 
-  SUN_RELATIVE_RADIUS,
-  SUN_DATA,
-  KUIPER_BELT_AU,
-  HELIOPAUSE_AU
+import React, { useMemo } from 'react';
+import {
+  AU_SCALE_TRUE, EARTH_RADIUS_TRUE_SCALE_BASE, SUN_RELATIVE_RADIUS,
+  SUN_DATA
 } from '../../data/constants';
-import { calculateBodyPosition, calculateSatellitePosition, calculateOrbitPath } from '../../utils/astronomy';
-import { project3D, smoothStep } from '../../core/projection';
-import { calculateBodyOpacity, shouldRenderComet } from '../../core/renderConfig';
+import { calculatePlanetarySystem, calculateSystemLocalOrbits } from '../../utils/astronomy';
+import { createSceneView } from '../../core/sceneView';
+import { evaluateBodyVisibility, VISIBILITY_THRESHOLD } from '../../core/renderConfig';
 import { PlanetData, Position, AppSettings, PinnedPlanet } from '../../types';
+import { getOrbitCurve } from '../../core/orbitCache';
+import { curveFromOrbitPoints } from '../../core/orbitGeometry';
+import { bodyOrbitOpacity, orbitCategoryForBody } from '../../core/orbitCategories';
+import { OrbitPath } from '../../core/orbitDrawing';
+import { createOrbitProjector } from '../../core/projectedOrbitCache';
+import { renderBudget } from '../../core/renderBudget';
+import { OrbitLayer, BeltLayer } from './SceneLayers';
+import { hasVisiblePopulations } from '../../core/asteroidBelt';
+import BodyLabels from './BodyLabels';
+import PlanetRing from './PlanetRing';
 
 interface TrueScaleSolarSystemProps {
   currentDate: Date;
   settings: AppSettings;
   onPlanetSelect: (planet: PlanetData) => void;
   selectedPlanetId: string | null;
+  cameraFocusId: string | null;
   highlightedAlignment: string[] | null;
   pinnedPlanets: PinnedPlanet[];
   zoomTransform: any;
@@ -30,391 +35,159 @@ interface TrueScaleSolarSystemProps {
   visibilityMap: Record<string, boolean>;
 }
 
-const ASTEROID_COUNT = 2000;
-const ASTEROID_BELT_INNER_AU = 2.2;
-const ASTEROID_BELT_OUTER_AU = 3.2;
-
+const ORIGIN = { x: 0, y: 0, z: 0 };
 const TrueScaleSolarSystem: React.FC<TrueScaleSolarSystemProps> = ({
-  currentDate,
-  settings,
-  onPlanetSelect,
-  selectedPlanetId,
-  highlightedAlignment,
-  pinnedPlanets,
-  zoomTransform,
-  dimensions,
-  centerOfRotation,
-  planets, dwarfs, asteroidsComets,
-  visibilityMap
+  currentDate, settings, onPlanetSelect, selectedPlanetId, cameraFocusId,
+  highlightedAlignment, pinnedPlanets, zoomTransform, dimensions, centerOfRotation,
+  planets, dwarfs, asteroidsComets, visibilityMap,
 }) => {
-  const orbitCanvasRef = useRef<HTMLCanvasElement>(null);
+  const projectOrbit = useMemo(createOrbitProjector, []);
   const k = zoomTransform.k;
+  const scene = useMemo(() => createSceneView({ scale: AU_SCALE_TRUE, settings,
+    zoom: zoomTransform, width: dimensions.w, height: dimensions.h, center: centerOfRotation }),
+  [settings, zoomTransform, dimensions, centerOfRotation]);
 
-  const visibleBodies = useMemo(() => {
-    let list = [...planets];
-    if (settings.showDwarfPlanets) {
-      list = [...list, ...dwarfs];
-    }
-    if (settings.showAsteroidsComets) {
-      list = [...list, ...asteroidsComets];
-    }
-    return list;
-  }, [settings.showDwarfPlanets, settings.showAsteroidsComets, planets, dwarfs, asteroidsComets]);
+  const visibleBodies = useMemo(() => [
+    ...planets,
+    ...(settings.showDwarfPlanets ? dwarfs : []),
+    ...(settings.showAsteroidsComets ? asteroidsComets : []),
+  ], [settings.showDwarfPlanets, settings.showAsteroidsComets, planets, dwarfs, asteroidsComets]);
 
-  const sceneData = useMemo<Array<{
-    id: string,
-    data: PlanetData | 'sun',
-    pos: any,
-    rawPos: Position,
-    type: 'star' | 'planet' | 'moon',
-    parentId?: string
-  }>>(() => {
-    const flatList: Array<{
-      id: string,
-      data: PlanetData | 'sun',
-      pos: any,
-      rawPos: Position,
-      type: 'star' | 'planet' | 'moon',
-      parentId?: string
-    }> = [];
-    const sunProj = project3D({ x: 0, y: 0, z: 0 }, AU_SCALE_TRUE, settings, k, 'sun', centerOfRotation);
-    flatList.push({ id: 'sun', data: 'sun', pos: { ...sunProj, z: sunProj.depth }, rawPos: { x: 0, y: 0, z: 0 }, type: 'star' });
+  const systems = useMemo(() => new Map(visibleBodies.map(parent =>
+    [parent.id, calculatePlanetarySystem(parent, currentDate, settings.useHighPrecision)])),
+  [visibleBodies, currentDate, settings.useHighPrecision]);
 
-    visibleBodies.forEach(planet => {
-      if (visibilityMap[planet.id] === false) return;
+  const prioritizedIds = useMemo(() => new Set([
+    selectedPlanetId, cameraFocusId?.replace(/^barycenter:/, ''), ...pinnedPlanets.map(pin => pin.id),
+  ].filter(Boolean)), [selectedPlanetId, cameraFocusId, pinnedPlanets]);
 
-      const rawPos = calculateBodyPosition(planet.id, planet.elements, currentDate, settings.useHighPrecision);
-      if ((planet.type === 'comet' || planet.type === 'asteroid')) {
-        const dist = Math.sqrt(rawPos.x**2 + rawPos.y**2 + rawPos.z**2);
-        if (!shouldRenderComet(dist, settings.renderSettings)) return;
-      }
-      const proj = project3D(rawPos, AU_SCALE_TRUE, settings, k, planet.id, centerOfRotation);
-      const renderOpacity = calculateBodyOpacity(planet, k, settings.renderSettings, true);
-      const finalOpacity = proj.opacity * renderOpacity;
-
-      flatList.push({ id: planet.id, data: planet, pos: { ...proj, z: proj.depth, opacity: finalOpacity, isVisible: proj.isVisible && finalOpacity > 0.05 }, rawPos, type: 'planet' });
-
-      if (planet.satellites && planet.satellites.length > 0) {
-        const massMult = planet.massRelativeToSun ? Math.sqrt(planet.massRelativeToSun) : 0;
-        planet.satellites.forEach(moon => {
-          if (visibilityMap[moon.id] === false || moon.isRing || !moon.elements) return;
-
-          const moonAbsPos = calculateSatellitePosition(moon.elements, rawPos, currentDate, massMult, moon.id, settings.useHighPrecision);
-          const moonProj = project3D(moonAbsPos, AU_SCALE_TRUE, settings, k, moon.id, centerOfRotation);
-          flatList.push({ id: moon.id, data: moon, pos: { ...moonProj, z: moonProj.depth }, rawPos: moonAbsPos, type: 'moon', parentId: planet.id });
-        });
-      }
-    });
-
-    return flatList;
-  }, [centerOfRotation, currentDate, k, settings, visibilityMap, visibleBodies]);
-
-  const asteroids = useMemo(() => {
-    const arr = [];
-    if (!settings.showAsteroidBelt) return [];
-    for(let i = 0; i < ASTEROID_COUNT; i++) {
-      const r = ASTEROID_BELT_INNER_AU + Math.random() * (ASTEROID_BELT_OUTER_AU - ASTEROID_BELT_INNER_AU);
-      const theta = Math.random() * 2 * Math.PI; 
-      const z = (Math.random() - 0.5) * 0.1; 
-      arr.push({ r, theta, z });
-    }
-    return arr;
-  }, [settings.showAsteroidBelt]);
-
-  const beltOpacity = useMemo(() => {
-     if (!settings.showRegionLabels) return 0; 
-     // In True Scale, k is much smaller. 
-     // k=1 in Schematic is like k=0.0027 in TrueScale.
-     // Schematic belt fades out at k < 0.15.
-     // Equivalent TrueScale k: 0.15 * 0.0027 = 0.0004
-     if (k < 0.0002) return 0.5; 
-     if (k > 0.001) return 0; 
-     return 0.5 * (1 - smoothStep(0.0002, 0.001, k));
-  }, [k, settings]);
-
-  const getSystemVisibilityThreshold = (planet: PlanetData): number => {
-      if (!planet.satellites || planet.satellites.length === 0) return 10000; 
-      const validSats = planet.satellites.filter(s => !s.isRing && s.elements);
-      if (validSats.length === 0) return 10000;
-      const maxA = Math.max(...validSats.map(s => s.elements.a));
-      const pixelTarget = 60; 
-      const effectiveMaxA = maxA > 0 ? maxA : 0.001; 
-      return pixelTarget / (effectiveMaxA * AU_SCALE_TRUE);
-  };
-
-  const calculateOpacities = (currentK: number, thresholdK: number) => {
-      const moonStart = thresholdK;
-      const moonEnd = thresholdK * 1.2; 
-      let moonOpacity = 0;
-      if (currentK >= moonEnd) moonOpacity = 1;
-      else if (currentK > moonStart) moonOpacity = (currentK - moonStart) / (moonEnd - moonStart);
-      const orbitStart = thresholdK * 1.1;
-      const orbitEnd = thresholdK * 1.4;
-      let orbitOpacity = 1;
-      if (currentK >= orbitEnd) orbitOpacity = 0;
-      else if (currentK > orbitStart) orbitOpacity = 1 - ((currentK - orbitStart) / (orbitEnd - orbitStart));
-      return { moonOpacity, orbitOpacity };
-  };
-
-  useLayoutEffect(() => {
-    const canvas = orbitCanvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    const { w, h } = dimensions;
-    canvas.width = w;
-    canvas.height = h;
-    ctx.clearRect(0, 0, w, h);
-    ctx.save();
-    ctx.translate(zoomTransform.x, zoomTransform.y);
-    ctx.scale(zoomTransform.k, zoomTransform.k);
-
-    // --- Draw Frontiers (Kuiper Belt / Heliopause) ---
-    const drawCosmicRing = (radiusAU: number, label: string, color: string, dashArray: number[]) => {
-        const segments = 180;
-        const points: any[] = [];
-        for (let i = 0; i <= segments; i++) {
-            const theta = (i / segments) * 2 * Math.PI;
-            const pos = { x: radiusAU * Math.cos(theta), y: radiusAU * Math.sin(theta), z: 0 };
-            points.push(project3D(pos, AU_SCALE_TRUE, settings, k, 'sun', centerOfRotation));
-        }
-        ctx.beginPath();
-        
-        // True Scale Logic: Divide dimension by k to get constant screen thickness
-        const scaledDash = dashArray.map(d => d / k); 
-        ctx.setLineDash(scaledDash);
-        ctx.lineWidth = 2 / k; // Constant 2px width on screen
-        
-        ctx.strokeStyle = color;
-        let started = false;
-        points.forEach(p => {
-            if (p.isVisible) {
-                if (!started) { ctx.moveTo(p.x, p.y); started = true; }
-                else { ctx.lineTo(p.x, p.y); }
-            } else { started = false; }
-        });
-        if (started && points[0].isVisible) ctx.closePath();
-        ctx.globalAlpha = beltOpacity;
-        ctx.stroke();
-        ctx.setLineDash([]); 
-
-        // Text rendering
-        if (settings.showRegionLabels) {
-            const chars = label.split('');
-            const labelCenterAngle = Math.PI / 4; 
-            // Adjust spread based on k to prevent overlapping at huge distances, 
-            // though constant screen spacing is ideal. 
-            // In True Scale, world space angle needs to remain constant to not distort.
-            const charSpread = 0.20; 
-            const startAngle = labelCenterAngle - ((chars.length - 1) * charSpread) / 2;
-            const textRadius = radiusAU * 1.08;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillStyle = color;
-            
-            // Calculate appropriate font size
-            // We want ~20px on screen.
-            // Font size in World Space = 20 / k.
-            const targetPx = 24;
-            const worldFontSize = targetPx / k;
-
-            ctx.font = `bold ${worldFontSize}px "Segoe UI", sans-serif`;
-            
-            chars.forEach((char, i) => {
-                const theta = startAngle + i * charSpread;
-                const pos = { x: textRadius * Math.cos(theta), y: textRadius * Math.sin(theta), z: 0 };
-                const proj = project3D(pos, AU_SCALE_TRUE, settings, k, 'sun', centerOfRotation);
-                
-                if (proj.isVisible && proj.opacity > 0.1) {
-                     ctx.globalAlpha = beltOpacity * 0.8 * proj.opacity; 
-                     ctx.fillText(char, proj.x, proj.y);
-                }
-            });
-        }
+  // Project every member independently. An offscreen primary does not hide a
+  // moon that is close to the observer or inside the current viewing volume.
+  const sceneData = useMemo(() => {
+    const projectBody = (body: PlanetData, rawPos: Position, type: 'star' | 'planet' | 'moon') => {
+      const proj = scene.project(rawPos);
+      const radiusAU = (body.id === 'sun' ? SUN_RELATIVE_RADIUS : body.relativeRadius || .1)
+        * EARTH_RADIUS_TRUE_SCALE_BASE / AU_SCALE_TRUE;
+      const priority = prioritizedIds.has(body.id);
+      const lod = evaluateBodyVisibility(body, proj, scene, settings.renderSettings,
+        { prioritized: priority, radiusAU });
+      const separationOpacity = type === 'moon' && !priority
+        ? scene.projectedSystemOpacity(rawPos, body.elements.a) : 1;
+      const opacity = proj.opacity * lod.opacity * separationOpacity;
+      return { id: body.id, data: body, type, rawPos, radiusAU,
+        pos: { ...proj, opacity, labelOpacity: lod.labelOpacity,
+          radiusPixels: lod.radiusPixels, isVisible: proj.isVisible && opacity > VISIBILITY_THRESHOLD } };
     };
-
-    if (settings.showRegionLabels && beltOpacity > 0.01) {
-         // Same dashes as Schematic but adjusted for True Scale logic inside function
-         drawCosmicRing(KUIPER_BELT_AU, '柯伊伯带', '#aaa', [5, 5]);
-         drawCosmicRing(HELIOPAUSE_AU, '日球层顶', '#666', [15, 10]);
+    const items = [projectBody(SUN_DATA, ORIGIN, 'star')];
+    for (const planet of visibleBodies) {
+      if (visibilityMap[planet.id] === false) continue;
+      const system = systems.get(planet.id)!;
+      items.push(projectBody(planet, system.parentPosition, 'planet'));
+      for (const moon of planet.satellites ?? []) {
+        if (visibilityMap[moon.id] === false || moon.isRing || !moon.elements) continue;
+        const position = system.satellitePositions.get(moon.id);
+        if (position) items.push(projectBody(moon, position, 'moon'));
+      }
     }
+    return items;
+  }, [scene, visibleBodies, systems, visibilityMap, prioritizedIds, settings.renderSettings]);
 
-    if (settings.orbitOpacity > 0) {
-        visibleBodies.forEach(planet => {
-            // Already checked visibilityMap above
-            if ((planet.type === 'comet' || planet.type === 'asteroid')) {
-                 const item = sceneData.find(i => i.id === planet.id);
-                 if (!item || !item.pos.isVisible) return;
-            }
-            const renderOpacity = calculateBodyOpacity(planet, k, settings.renderSettings, true);
-            if (renderOpacity < 0.05) return;
-            const hasSatellites = planet.satellites && planet.satellites.length > 0;
-            if (!hasSatellites) {
-                drawOrbit(ctx, planet, { x: 0, y: 0, z: 0 }, planet.id === selectedPlanetId, pinnedPlanets, 1.0 * renderOpacity);
-            } else {
-                const thresholdK = getSystemVisibilityThreshold(planet);
-                const { moonOpacity, orbitOpacity } = calculateOpacities(k, thresholdK);
-                if (orbitOpacity > 0.01) drawOrbit(ctx, planet, { x: 0, y: 0, z: 0 }, planet.id === selectedPlanetId, pinnedPlanets, orbitOpacity * renderOpacity);
-                if (moonOpacity > 0.01) {
-                    const parentItem = sceneData.find(i => i.id === planet.id);
-                    const parentRawPos = parentItem ? parentItem.rawPos : null;
-                    if (parentRawPos) {
-                        planet.satellites.forEach(moon => {
-                            // CHECK VISIBILITY FOR MOONS HERE
-                            if (visibilityMap[moon.id] === false) return;
+  const systemOpacity = (id: string) => {
+    const system = systems.get(id)!;
+    const radius = Math.max(0, ...(system.parent.satellites ?? [])
+      .filter(moon => !moon.isRing && moon.elements)
+      .map(moon => moon.elements.a * (1 + moon.elements.e)));
+    return radius > 0 ? scene.projectedSystemOpacity(system.barycenter, radius) : 0;
+  };
 
-                            if (moon.isRing) {
-                                drawRing(ctx, moon, parentRawPos, moonOpacity);
-                            } else {
-                                if (moon.elements) {
-                                    drawOrbit(ctx, moon, parentRawPos, moon.id === selectedPlanetId, pinnedPlanets, moonOpacity);
-                                }
-                            }
-                        });
-                    }
-                }
-            }
-        });
+  const collectOrbit = (paths: OrbitPath[], body: PlanetData, center: Position,
+    opacity: number, localPoints?: Position[]) => {
+    opacity *= bodyOrbitOpacity(body,settings);
+    if (!body.elements || opacity < .005) return;
+    const pin = pinnedPlanets.find(item => item.id === body.id);
+    const selected = selectedPlanetId === body.id;
+    const emphasized = selected || !!pin;
+    const points = projectOrbit(localPoints ? curveFromOrbitPoints(localPoints)
+      : getOrbitCurve(body, currentDate, settings.useHighPrecision), scene,
+      renderBudget(settings.renderSettings).orbitTolerance, center);
+    paths.push({ points, color: pin?.color ?? (selected ? '#ffffff' : '#8995a7'),
+      opacity, category:orbitCategoryForBody(body),
+      emphasized, local: !!localPoints });
+  };
+
+  const paths: OrbitPath[] = [];
+  if (settings.orbitOpacity > 0) {
+    for (const planet of visibleBodies) {
+      if (visibilityMap[planet.id] === false) continue;
+      const localOpacity = systemOpacity(planet.id);
+      // Track visibility belongs to its geometry, not to the current body's
+      // screen position: nearby arcs remain possible with an offscreen body.
+      collectOrbit(paths, planet, ORIGIN, 1 - localOpacity);
+      if (localOpacity <= .005) continue;
+      const system = systems.get(planet.id)!;
+      const localPaths = calculateSystemLocalOrbits(system);
+      for (const body of [planet, ...(planet.satellites ?? [])]) {
+        if (visibilityMap[body.id] === false) continue;
+        const points = localPaths.get(body.id);
+        if (points) collectOrbit(paths, body, system.barycenter, localOpacity, points);
+      }
     }
-    ctx.restore();
-  }, [visibleBodies, zoomTransform, dimensions, settings, selectedPlanetId, pinnedPlanets, k, centerOfRotation, beltOpacity, visibilityMap, sceneData]);
+  }
 
-  const drawOrbit = (ctx: CanvasRenderingContext2D, body: PlanetData, centerPos: Position, isSelected: boolean, pinnedList: PinnedPlanet[], lodOpacity: number) => {
-      if (!body.elements) return;
+  return <>
+    <OrbitLayer paths={paths} scene={scene} settings={settings} zoom={zoomTransform} />
+    {hasVisiblePopulations(settings) && <BeltLayer scene={scene} settings={settings} zoom={zoomTransform} center={centerOfRotation} date={currentDate} referenceBody={planets.find(p=>p.id==='jupiter')} />}
+    <svg className="absolute inset-0 z-10 w-full h-full overflow-visible pointer-events-none">
+      <g transform={zoomTransform.toString()}>
+        {[...systems.values()].filter(system => system.usesBarycenter && visibilityMap[system.parent.id] !== false).map(system => {
+          const opacity = systemOpacity(system.parent.id);
+          if (opacity < .1) return null;
+          const point = scene.project(system.barycenter);
+          if (!scene.sphereVisible(point, 4)) return null;
+          const offsetPx = scene.projectedRadius(Math.hypot(system.parentOffset.x,
+            system.parentOffset.y, system.parentOffset.z), point);
+          if (offsetPx < 3 && cameraFocusId !== `barycenter:${system.parent.id}`) return null;
+          return <g key={`center:${system.parent.id}`} data-barycenter={system.parent.id}
+            transform={`translate(${point.x}, ${point.y})`} opacity={opacity * .45}>
+            <path d={`M ${-4/k} 0 H ${4/k} M 0 ${-4/k} V ${4/k}`}
+              fill="none" stroke="#bac8dc" strokeWidth={1/k} />
+          </g>;
+        })}
+        {sceneData.filter(item => item.pos.isVisible && !item.data.isRing)
+          .sort((a, b) => a.pos.depth - b.pos.depth).map(item => {
+            const isSun = item.type === 'star';
+            const selected = selectedPlanetId === item.id;
+            const highlighted = highlightedAlignment?.includes(item.id) && settings.showEventHighlights;
+            const pin = pinnedPlanets.find(p => p.id === item.id);
+            const visualRadius = Math.max(item.pos.radiusPixels, 1.5) / k;
+            const rings = item.data.satellites?.filter(ring => ring.isRing && visibilityMap[ring.id] !== false) ?? [];
+            const ringLayer = (side: 'front' | 'back') => rings.map(ring =>
+              <PlanetRing key={ring.id} ring={ring} radiusScale={AU_SCALE_TRUE * item.pos.scaleFactor}
+                viewTilt={settings.viewTilt} viewYaw={settings.viewYaw} side={side} />);
+            return <g key={item.id} data-body={item.id}
+              transform={`translate(${item.pos.x}, ${item.pos.y})`}
+              onClick={e => { e.stopPropagation(); onPlanetSelect(item.data); }}
+              className="cursor-pointer hover:opacity-100 pointer-events-auto" style={{ opacity: item.pos.opacity }}>
+              {(selected || pin) && <circle r={visualRadius * 4} fill="none"
+                stroke={pin?.color || 'white'} strokeWidth={1/k} className="animate-pulse" />}
+              {highlighted && <circle r={visualRadius * 3} fill="none" stroke="#00ffcc" strokeWidth={2/k} />}
+              <circle r={Math.max(visualRadius, 10/k)} fill="transparent" />
+              {ringLayer('back')}
+              <circle data-disc={item.id} r={visualRadius} fill={isSun ? '#FDB813' : item.data.color} />
+              {ringLayer('front')}
 
-      const pinnedState = pinnedList.find(p => p.id === body.id);
-      const isPinned = !!pinnedState;
-      const color = isPinned ? pinnedState.color : (isSelected ? '#ffffff' : '#555');
-      const opacityMultiplier = (isSelected || isPinned) ? Math.max(0.9, settings.orbitOpacity) : settings.orbitOpacity;
-      const finalOpacity = opacityMultiplier * lodOpacity;
-      if (finalOpacity < 0.05) return;
-      
-      const points = calculateOrbitPath(body.elements, 180);
-      
-      ctx.beginPath();
-      let started = false;
-      points.forEach((pt) => {
-          const absPos = { x: centerPos.x + pt.x, y: centerPos.y + pt.y, z: centerPos.z + pt.z };
-          const proj = project3D(absPos, AU_SCALE_TRUE, settings, k, body.id, centerOfRotation);
-          if (proj.isVisible) {
-              if (!started) { ctx.moveTo(proj.x, proj.y); started = true; } else { ctx.lineTo(proj.x, proj.y); }
-          }
-      });
-      if (started && points.length > 0) {
-           const absStart = { x: centerPos.x + points[0].x, y: centerPos.y + points[0].y, z: centerPos.z + points[0].z };
-           const startProj = project3D(absStart, AU_SCALE_TRUE, settings, k, body.id, centerOfRotation);
-           if (startProj.isVisible) ctx.lineTo(startProj.x, startProj.y);
-      }
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 4.0 / k; 
-      ctx.globalAlpha = finalOpacity;
-      ctx.stroke();
-  };
-
-  const drawRing = (ctx: CanvasRenderingContext2D, ringData: PlanetData, centerPos: Position, lodOpacity: number) => {
-      if (!ringData.innerRadius || !ringData.outerRadius) return;
-      const segments = 90;
-      const innerPts: Position[] = [];
-      const outerPts: Position[] = [];
-      const tiltRad = (ringData.tilt || 0) * Math.PI / 180;
-      const cosT = Math.cos(tiltRad);
-      const sinT = Math.sin(tiltRad);
-      for(let i=0; i<=segments; i++) {
-          const theta = (i / segments) * Math.PI * 2;
-          const cosTheta = Math.cos(theta);
-          const sinTheta = Math.sin(theta);
-          const xi = ringData.innerRadius * cosTheta;
-          const yi = ringData.innerRadius * sinTheta;
-          innerPts.push({ x: xi, y: yi * cosT, z: yi * sinT });
-          const xo = ringData.outerRadius * cosTheta;
-          const yo = ringData.outerRadius * sinTheta;
-          outerPts.push({ x: xo, y: yo * cosT, z: yo * sinT });
-      }
-      ctx.beginPath();
-      let first = true;
-      outerPts.forEach((pt) => {
-         const abs = { x: centerPos.x + pt.x, y: centerPos.y + pt.y, z: centerPos.z + pt.z };
-         const proj = project3D(abs, AU_SCALE_TRUE, settings, k, ringData.id, centerOfRotation);
-         if (first) { ctx.moveTo(proj.x, proj.y); first = false; }
-         else ctx.lineTo(proj.x, proj.y);
-      });
-      ctx.closePath();
-      for(let i=segments; i>=0; i--) {
-         const pt = innerPts[i];
-         const abs = { x: centerPos.x + pt.x, y: centerPos.y + pt.y, z: centerPos.z + pt.z };
-         const proj = project3D(abs, AU_SCALE_TRUE, settings, k, ringData.id, centerOfRotation);
-         ctx.lineTo(proj.x, proj.y);
-      }
-      ctx.closePath();
-      ctx.fillStyle = ringData.color;
-      ctx.globalAlpha = (ringData.opacity || 0.5) * lodOpacity;
-      ctx.fill("evenodd");
-  };
-
-  const getRadius = (item: any) => {
-      if (item.type === 'star') return SUN_RELATIVE_RADIUS * EARTH_RADIUS_TRUE_SCALE_BASE;
-      const relativeR = (item.data as PlanetData).relativeRadius || 0.1;
-      return Math.max(relativeR * EARTH_RADIUS_TRUE_SCALE_BASE, 0.1 / k);
-  };
-
-  return (
-    <>
-      <canvas ref={orbitCanvasRef} className="absolute inset-0 z-0 w-full h-full" />
-      <svg className="absolute inset-0 z-10 w-full h-full overflow-visible pointer-events-none">
-          <g transform={zoomTransform.toString()}>
-              {settings.showAsteroidBelt && k < 10 && (
-                  <g className="pointer-events-none opacity-60">
-                      {asteroids.map((ast, idx) => {
-                          const r_au = ast.r;
-                          const angle = ast.theta; 
-                          const x_au = r_au * Math.cos(angle);
-                          const y_au = r_au * Math.sin(angle);
-                          const z_au = ast.z;
-                          const proj = project3D({ x: x_au, y: y_au, z: z_au }, AU_SCALE_TRUE, settings, k, undefined, centerOfRotation);
-                          if (!proj.isVisible) return null;
-                          return <circle key={idx} cx={proj.x} cy={proj.y} r={0.5 / k} fill="#555" />;
-                      })}
-                  </g>
-              )}
-
-              {sceneData.filter(item => item.pos.isVisible && (item.data === 'sun' || !(item.data as PlanetData).isRing))
-                .sort((a, b) => a.pos.depth - b.pos.depth)
-                .map(item => {
-                   const isSun = item.type === 'star';
-                   const isMoon = item.type === 'moon';
-                   let opacity = item.pos.opacity; 
-                   if (isMoon && item.parentId) {
-                       const parent = visibleBodies.find(p => p.id === item.parentId);
-                       if (parent) {
-                           const thresholdK = getSystemVisibilityThreshold(parent);
-                           const { moonOpacity } = calculateOpacities(k, thresholdK);
-                           opacity *= moonOpacity;
-                       }
-                   }
-                   if (opacity < 0.05) return null;
-                   const radius = getRadius(item);
-                   const isSelected = selectedPlanetId === item.id;
-                   const isHighlighted = highlightedAlignment?.includes(item.id);
-                   const pinnedState = pinnedPlanets.find(p => p.id === item.id);
-                   const isPinned = !!pinnedState;
-                   const color = isSun ? '#FDB813' : (item.data as PlanetData).color;
-                   const name = isSun ? 'Sun' : (item.data as PlanetData).name;
-                   const visualRadius = Math.max(radius * item.pos.scaleFactor, 1.5 / k);
-
-                   return (
-                       <g key={item.id} transform={`translate(${item.pos.x}, ${item.pos.y})`} onClick={(e) => { e.stopPropagation(); if (isSun) onPlanetSelect(SUN_DATA); else onPlanetSelect(item.data as PlanetData); }} className="cursor-pointer hover:opacity-100 pointer-events-auto" style={{ opacity }}>
-                           {(isSelected || isPinned) && <circle r={visualRadius * 4} fill="none" stroke={pinnedState?.color || "white"} strokeWidth={1 / k} className="animate-pulse" />}
-                           {isHighlighted && settings.showEventHighlights && <circle r={visualRadius * 3} fill="none" stroke="#00ffcc" strokeWidth={2 / k} />}
-                           <circle r={visualRadius} fill={color} />
-                           <text y={visualRadius + (12/k)} textAnchor="middle" fill={isSelected || (isHighlighted && settings.showEventHighlights) || isPinned ? 'white' : '#aaa'} fontSize={12 / k} fontWeight={isSelected || (isHighlighted && settings.showEventHighlights) || isPinned ? 'bold' : 'normal'} style={{ textShadow: '0 0 2px black' }}>{name}</text>
-                       </g>
-                   );
-                })
-              }
-          </g>
-      </svg>
-    </>
-  );
+            </g>;
+          })}
+      </g>
+      <BodyLabels width={dimensions.w} height={dimensions.h} onSelect={id=>{const item=sceneData.find(i=>i.id===id);if(item) onPlanetSelect(item.data);}}
+        labels={sceneData.filter(item=>item.pos.isVisible&&!item.data.isRing).map(item=>{
+          const emphasized=prioritizedIds.has(item.id)||(settings.showEventHighlights&&!!highlightedAlignment?.includes(item.id));
+          return {id:item.id,text:item.id==='sun'?'Sun':item.data.name,x:item.pos.screenX!,y:item.pos.screenY!,radius:Math.max(1.5,item.pos.radiusPixels),
+            opacity:item.pos.opacity*item.pos.labelOpacity,color:emphasized?'white':item.id==='sun'?'#FDB813':'#aaa',emphasized,
+            priority:emphasized?100:item.id==='sun'?90:item.type==='moon'?60:item.data.type==='planet'?80:40};
+        })}/>
+    </svg>
+  </>;
 };
 
 export default TrueScaleSolarSystem;

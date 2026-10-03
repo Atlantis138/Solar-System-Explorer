@@ -1,0 +1,33 @@
+{
+  "source": "d3-celestial / XHIP (Anderson & Francis, 2012)",
+  "repository": "https://github.com/ofrohn/d3-celestial",
+  "revision": "7e720a3de062059d4c5400a379146a601d9010e0",
+  "epoch": "J2000",
+  "raUnit": "degrees, 0 <= RA < 360",
+  "magnitudeLimit": 6.5,
+  "starCount": 8876,
+  "constellationCount": 88,
+  "lineCount": 743,
+  "notes": [
+    "Selected catalog entries through apparent magnitude 6.5, plus any required line endpoints.",
+    "Constellation figures are conventional illustrations, not IAU boundaries.",
+    "Fixed J2000 positions; no proper motion or precession. B-V colors are approximate."
+  ],
+  "inputs": {
+    "stars.8.json": "e3ec6cde89bae0dde064d91c1edb9ec53c3c40d5c12fdf5d30f9a4de5dbc2143",
+    "starnames.json": "19c84bc885f8a97c3b8e1f6a380084c575a9758dedfe35256e911a823ec3a695",
+    "constellations.json": "ab4ae692027cbc042c0d6791a84456a65eb7c55656107fd00c58ff6e55d4d8b2",
+    "constellations.lines.json": "294f66bef5d5cf50b1e17f16d2efa1d97a15131612c68dd935adef6e7373e13c"
+  },
+  "regions": {
+    "source": "d3-celestial / IAU constellation boundaries",
+    "epoch": "J2000",
+    "constellationCount": 88,
+    "regionCount": 89,
+    "notes": "B1875 boundary parallels/meridians sampled at <= 1 degree and precessed to J2000; source coordinates rounded, intended for visualization.",
+    "inputs": {
+      "constellations.json": "ab4ae692027cbc042c0d6791a84456a65eb7c55656107fd00c58ff6e55d4d8b2",
+      "constellations.bounds.json": "f2e2687af6b20b24567879f838c21874d412efcc93ecc1966be07e78431cc196"
+    }
+  }
+}

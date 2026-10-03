@@ -1,0 +1,40 @@
+{
+  "model": "Mass-weighted planet/satellite systems; fixed-element Kepler approximation where no satellite ephemeris is available",
+  "sources": [
+    {
+      "name": "Astronomy Engine v2.1.19",
+      "url": "https://github.com/cosinekitty/astronomy/tree/v2.1.19",
+      "usage": "Earth and GeoMoonState are geocentric/heliocentric body-center states; JupiterMoons gives jovicentric states. Preserve supplied planet body centers. Treat the integrated Pluto system solution as the system barycenter."
+    },
+    {
+      "name": "IAU WGCCRE 2015 (Archinal et al. 2018)",
+      "url": "https://doi.org/10.1007/s10569-017-9805-5",
+      "usage": "Pluto/Charon J2000 pole RA=132.993 deg, Dec=-6.163 deg, Pluto W0=302.695 deg. Near-circular synchronous approximation for Charon, not a precision satellite ephemeris."
+    },
+    {
+      "name": "Stellarium solar system catalog",
+      "url": "https://github.com/Stellarium/stellarium/blob/master/data/ssystem_major.ini",
+      "usage": "Cross-check separation 19596 km, radii Pluto 1188.3 km and Charon 606 km; physical/orbital constants only."
+    },
+    {
+      "name": "JPL Solar System Dynamics satellite physical parameters",
+      "url": "https://ssd.jpl.nasa.gov/sats/phys_par/",
+      "usage": "Approximate individual satellite mass ratios; existing catalog elements for other satellites retained."
+    }
+  ],
+  "limitations": [
+    "Only direct planet/satellite systems are supported; rings are not mass-bearing satellites.",
+    "The Sun remains the heliocentric display origin; this is not an N-body integration of the whole Solar System.",
+    "For multiple moons, local orbit lines are instantaneous osculating paths with other moons held at their current offsets.",
+    "Charon uses a fixed circular approximation with 6.3872273-day period, in both precision modes. Long-term phase is illustrative.",
+    "Visibility switches affect drawing only, never the mass budget."
+  ],
+  "catalogEditing": {
+    "storage": "Built-in overrides and custom objects are stored separately in this browser. Built-in entries can be restored without deleting custom satellites.",
+    "units": "Mass is individual body mass / solar mass; radius is Earth radii; satellite semi-major axis is parent-relative separation in AU. Angles use J2000 ecliptic degrees; optional epochJD is Julian date, periodDays is days.",
+    "missingMass": "Unknown masses are never inferred. A missing parent mass requires an explicit satellite period and disables barycentric reaction. Missing satellite mass gives a massless tracer and a visible diagnostic.",
+    "precisionPolicy": "Unchanged systems retain supported precision ephemerides. Altered masses/orbits or new satellite membership cause that system to use the supplied Kepler parameters; cosmetic edits retain precision ephemerides.",
+    "referenceDefault": "A root newly acquiring satellites defaults to system-barycenter when no orbitReference was specified. Explicit body references remain supported.",
+    "periodPriority": "An explicit periodDays overrides the mass-derived two-body period; satellite discrepancies larger than 2% produce a diagnostic without changing the input. Mass still controls barycenter allocation."
+  }
+}

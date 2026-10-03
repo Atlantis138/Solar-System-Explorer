@@ -1,0 +1,148 @@
+{
+  "updated": "2026-10-03",
+  "model": "Fixed-epoch, heliocentric J2000 ecliptic Kepler approximations. Not an N-body integration or precision small-body ephemeris. Scalar radii approximate irregular shapes. Unmeasured masses are omitted.",
+  "objects": [
+    {
+      "id": "pallas",
+      "name": "智神星",
+      "englishName": "Pallas",
+      "description": "高倾角的主带大型小行星；轨道显著偏离多数主带成员所在平面。",
+      "orbit": {
+        "a": 2.7699258,
+        "e": 0.230643,
+        "i": 34.92833,
+        "N": 172.88859,
+        "w": 310.9334,
+        "M": 211.52977,
+        "epochJD": 2461000.5,
+        "periodDays": 1683.8392545306851
+      },
+      "radiusKm": 256,
+      "massKg": 2.042e+20,
+      "color": "#b6b3aa",
+      "displayRadius": 2.6,
+      "source": "https://raw.githubusercontent.com/Stellarium/stellarium/master/data/ssystem_minor.ini"
+    },
+    {
+      "id": "eros",
+      "name": "爱神星",
+      "englishName": "Eros",
+      "description": "阿莫尔型近地小行星；NEAR Shoemaker 曾绕行并着陆。画面以平均半径示意其不规则形状。",
+      "orbit": {
+        "a": 1.458121,
+        "e": 0.222836,
+        "i": 10.82847,
+        "N": 304.27008,
+        "w": 178.92978,
+        "M": 310.55432,
+        "epochJD": 2461000.5,
+        "periodDays": 643.1151928282652
+      },
+      "radiusKm": 8.42,
+      "massKg": 6690400000000000.0,
+      "color": "#c5af91",
+      "displayRadius": 2.0,
+      "source": "https://raw.githubusercontent.com/Stellarium/stellarium/master/data/ssystem_minor.ini"
+    },
+    {
+      "id": "chiron",
+      "name": "凯龙星",
+      "englishName": "Chiron (2060 / 95P)",
+      "description": "半人马天体，也具有彗星活动；在土星与天王星区域间穿行。采用历元轨道近似，未模拟巨行星摄动。",
+      "orbit": {
+        "a": 13.60507482310605,
+        "e": 0.3793369628003077,
+        "i": 6.941601653423277,
+        "N": 209.39694607565897,
+        "w": 339.14367007006854,
+        "M": 27.996654338533517,
+        "epochJD": 2451545,
+        "periodDays": 18329.466679042147
+      },
+      "radiusKm": 97.74667322530202,
+      "color": "#b8b8b2",
+      "displayRadius": 2.4,
+      "source": "https://raw.githubusercontent.com/CelestiaProject/CelestiaContent/master/data/outersys.ssc"
+    },
+    {
+      "id": "arrokoth",
+      "name": "天涯海角",
+      "englishName": "Arrokoth (486958)",
+      "description": "新视野号飞掠的柯伊伯带接触双星。圆点以最大半轴约 17.3 km 示意外廓，未还原双叶形状。",
+      "orbit": {
+        "a": 44.55124634225967,
+        "e": 0.04096515756134208,
+        "i": 2.451831129511527,
+        "N": 158.9767652155288,
+        "w": 174.6564493231953,
+        "M": 315.9005911094172,
+        "epochJD": 2458484.732303241,
+        "periodDays": 108614.6017340901
+      },
+      "radiusKm": 17.273,
+      "color": "#ba8d7b",
+      "displayRadius": 2.0,
+      "source": "https://raw.githubusercontent.com/CelestiaProject/CelestiaContent/master/data/outersys.ssc"
+    }
+  ],
+  "physicalSources": {
+    "pallas": "https://raw.githubusercontent.com/CelestiaProject/CelestiaContent/master/data/asteroids.ssc (mass and density imply approximately 256 km volume-equivalent radius)",
+    "eros": "https://raw.githubusercontent.com/Stellarium/stellarium/master/data/ssystem_minor.ini (8.42 km mean radius); https://raw.githubusercontent.com/CelestiaProject/CelestiaContent/master/data/asteroids.ssc (mass)",
+    "chiron": "https://raw.githubusercontent.com/CelestiaProject/CelestiaContent/master/data/outersys.ssc (volume-equivalent radius from 126 x 109 x 68 km semi-axes; no assumed hydrostatic mass)",
+    "arrokoth": "https://raw.githubusercontent.com/CelestiaProject/CelestiaContent/master/data/outersys.ssc (17.273 km MAXIMUM semi-axis, deliberately not called a mean radius)"
+  },
+  "chironFrameConversion": {
+    "note": "Source uses SSB-centred EclipticJ2000 elements. Reconstructed position/velocity, subtracted Astronomy Engine 2.1.19 barycentric Sun state at TT J2000, and derived heliocentric osculating elements with solar GM. Source periods in Julian years converted by 365.25. Treating SSB elements directly as heliocentric would be incorrect.",
+    "input": {
+      "a": 13.66009987215255,
+      "e": 0.3809847389441021,
+      "i": 6.933611889008302,
+      "N": 209.3211014108095,
+      "w": 339.4657053799355,
+      "M": 27.72209767709737,
+      "periodDays": 18428.41811997787,
+      "epochJD": 2451545
+    },
+    "output": {
+      "a": 13.60507482310605,
+      "e": 0.3793369628003077,
+      "i": 6.941601653423277,
+      "N": 209.39694607565897,
+      "w": 339.14367007006854,
+      "M": 27.996654338533517,
+      "epochJD": 2451545,
+      "periodDays": 18329.466679042147
+    },
+    "sunStateEclipticJ2000": {
+      "r": [
+        -0.007143751950152074,
+        -0.0027938679828586506,
+        0.00020623859598406676
+      ],
+      "v": [
+        5.334489982934833e-06,
+        -7.466206212422779e-06,
+        -9.567048363157822e-08
+      ]
+    },
+    "heliocentricState": {
+      "r": [
+        -3.5295905603347117,
+        -9.127362939556047,
+        0.7572365705790773
+      ],
+      "v": [
+        0.004971271212967224,
+        -0.003655597730219448,
+        0.0006848548826889418
+      ]
+    },
+    "roundTripPositionErrorAU": 1.2994827337208943e-14,
+    "roundTripVelocityErrorAUPerDay": 7.66723369179671e-18
+  },
+  "sourceSnapshots": {
+    "ssystem_minor.ini": "542cb04829d8d728674d65a325eb761f9cac7bc00a25b6e2bbd95674f18e5846",
+    "asteroids.ssc": "2de46624c6fb91a011bf9f2826717f4dff2f0206045d241d721711d8f206d69e",
+    "outersys.ssc": "1002a4173c453865ed0430acadd548bd5368e36f58f6ca7e43b52bb205b9fb46"
+  }
+}

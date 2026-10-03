@@ -209,7 +209,7 @@ const EventsPanel: React.FC<EventsPanelProps> = ({
                         <input type="range" min="0" max="10" step="0.1" value={settings.transitTolerance} onChange={handleTransitToleranceChange} disabled={strictTransitMode} className={`w-full h-1.5 rounded-lg appearance-none cursor-pointer focus:outline-none ${strictTransitMode ? 'bg-gray-600 cursor-not-allowed' : 'bg-gray-600'}`} />
                    </div>
                    <div className="flex items-center justify-between mb-3 bg-gray-800 p-2 rounded border border-gray-700/50">
-                        <div className="flex flex-col"><span className="text-gray-200 text-xs font-medium">严格模式 (Strict)</span><span className="text-gray-500 text-[9px]">Use Solar Angular Size</span></div>
+                        <div className="flex flex-col"><span className="text-gray-200 text-xs font-medium">严格模式 (Strict)</span><span className="text-gray-500 text-[10px]">Use Solar Angular Size</span></div>
                         <div onClick={() => setStrictTransitMode(!strictTransitMode)} className={`w-9 h-5 flex items-center rounded-full p-0.5 cursor-pointer duration-300 ease-in-out ${strictTransitMode ? 'bg-purple-600' : 'bg-gray-700'}`}><div className={`bg-white w-4 h-4 rounded-full shadow-md transform duration-300 ease-in-out ${strictTransitMode ? 'translate-x-4' : ''}`} /></div>
                    </div>
                    {strictTransitMode && (

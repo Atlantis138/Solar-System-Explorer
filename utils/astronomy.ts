@@ -30,8 +30,9 @@ const solveKepler = (M: number, e: number): number => {
 
 // --- Method A: J2000 Kepler Calculation (Fast, Approximate) ---
 const calculateKeplerPosition = (elements: OrbitalElements, date: Date, centralMassMultiplier: number = 1.0): Position => {
-  const dayDiff = (date.getTime() - J2000_DATE.getTime()) / MILLISECONDS_PER_DAY;
-  const n = (0.9856076686 * centralMassMultiplier) / Math.pow(elements.a, 1.5);
+  const epochMs = elements.epochJD === undefined ? J2000_DATE.getTime() : (elements.epochJD - 2440587.5) * MILLISECONDS_PER_DAY;
+  const dayDiff = (date.getTime() - epochMs) / MILLISECONDS_PER_DAY;
+  const n = elements.periodDays ? 360 / elements.periodDays : (0.9856076686 * centralMassMultiplier) / Math.pow(elements.a, 1.5);
   const M_curr = normalizeAngle(elements.M + n * dayDiff);
   
   const E = solveKepler(M_curr, elements.e);
@@ -166,13 +167,172 @@ export const calculateSatellitePosition = (
     };
 };
 
+// --- Planet/satellite systems ---
+// Local vectors always mean satellite minus parent. Visibility never affects mass.
+interface RelativeState { position: Position; velocity?: Position; precise: boolean }
+export interface PlanetarySystem {
+  parent: PlanetData;
+  parentPosition: Position;
+  barycenter: Position;
+  parentOffset: Position;
+  satellitePositions: Map<string, Position>;
+  relativeStates: Map<string, RelativeState>;
+  massFractions: Map<string, number>;
+  usesBarycenter: boolean;
+  preciseParent: boolean;
+}
+const plus = (a: Position, b: Position): Position => ({ x: a.x+b.x, y: a.y+b.y, z: a.z+b.z });
+const times = (a: Position, k: number): Position => ({ x: a.x*k, y: a.y*k, z: a.z*k });
+const minus = (a: Position, b: Position) => plus(a, times(b, -1));
+const zero = (): Position => ({ x: 0, y: 0, z: 0 });
+const norm = (a: Position) => Math.hypot(a.x, a.y, a.z);
+const cross = (a: Position, b: Position): Position => ({ x:a.y*b.z-a.z*b.y, y:a.z*b.x-a.x*b.z, z:a.x*b.y-a.y*b.x });
+const positiveMass = (body: PlanetData) => Number.isFinite(body.massRelativeToSun) && body.massRelativeToSun! > 0 ? body.massRelativeToSun! : 0;
+const fromEquatorial = (v: Position): Position => {
+  const eps = deg2rad(23.4392911);
+  return { x:v.x, y:v.y*Math.cos(eps)+v.z*Math.sin(eps), z:-v.y*Math.sin(eps)+v.z*Math.cos(eps) };
+};
+const fromState = (v: any): RelativeState => ({ position: fromEquatorial(v),
+  velocity: fromEquatorial({ x:v.vx, y:v.vy, z:v.vz }), precise:true });
+const systemCache = new WeakMap<PlanetData, { key: string; engine: unknown; value: PlanetarySystem }>();
+
+export function calculatePlanetarySystem(parent: PlanetData, date: Date, highPrecision = false): PlanetarySystem {
+  const moons = (parent.satellites ?? []).filter(m => !m.isRing && m.isValid !== false && m.elements);
+  const engine = highPrecision && typeof Astronomy !== 'undefined' ? Astronomy : null;
+  const fingerprint = (b: PlanetData) => [b.id, b.isCustom, b.hasCustomOrbit, b.hasCustomDynamics, b.massRelativeToSun, b.orbitReference, b.ephemerisReference, ...Object.values(b.elements ?? {})].join(',');
+  const key = [date.getTime(), highPrecision, fingerprint(parent), ...moons.map(fingerprint)].join('|');
+  const cached = systemCache.get(parent);
+  if (cached?.key === key && cached.engine === engine) return cached.value;
+  const preciseAnchor = engine && !parent.isCustom && !parent.hasCustomOrbit && !parent.hasCustomDynamics ? calculateHighPrecisionPosition(parent.id, date) : null;
+  const anchor = preciseAnchor ?? calculateBodyPosition(parent.id, parent.elements, date, false);
+  const parentMass = positiveMass(parent);
+  const totalMass = parentMass + moons.reduce((sum, m) => sum + positiveMass(m), 0);
+  const relativeStates = new Map<string, RelativeState>();
+  let jovian: any = null;
+  if (preciseAnchor && parent.id === 'jupiter' && engine?.JupiterMoons) {
+    try { jovian = engine.JupiterMoons(date); } catch { /* Fall back to catalog orbits. */ }
+  }
+  for (const moon of moons) {
+    let state: RelativeState | undefined;
+    if (preciseAnchor && !moon.isCustom && !moon.hasCustomOrbit && !moon.hasCustomDynamics) {
+      try {
+        if (parent.id === 'earth' && moon.id === 'moon' && engine?.GeoMoonState)
+          state = fromState(engine.GeoMoonState(date));
+        else if (jovian?.[moon.id]) state = fromState(jovian[moon.id]);
+      } catch { /* Missing/out-of-range ephemeris: use the catalog. */ }
+    }
+    if (!state) state = { position: calculateKeplerPosition(moon.elements, date,
+      Math.sqrt(parentMass + positiveMass(moon))), precise:false };
+    relativeStates.set(moon.id, state);
+  }
+  let shift = zero();
+  const massFractions = new Map<string, number>();
+  for (const moon of moons) {
+    // Missing parent mass means legacy parent-centered motion, not an invented mass.
+    const fraction = parentMass > 0 ? positiveMass(moon) / totalMass : 0;
+    massFractions.set(moon.id, fraction);
+    shift = plus(shift, times(relativeStates.get(moon.id)!.position, fraction));
+  }
+  const reference = preciseAnchor ? parent.ephemerisReference ?? 'body' : parent.orbitReference ?? 'body';
+  const barycenter = reference === 'system-barycenter' ? anchor : plus(anchor, shift);
+  const parentPosition = reference === 'system-barycenter' ? minus(anchor, shift) : anchor;
+  const value: PlanetarySystem = { parent, parentPosition, barycenter, parentOffset:times(shift, -1),
+    satellitePositions:new Map(moons.map(m => [m.id, plus(parentPosition, relativeStates.get(m.id)!.position)])),
+    relativeStates, massFractions, usesBarycenter:[...massFractions.values()].some(q => q > 0), preciseParent:!!preciseAnchor };
+  systemCache.set(parent, { key, engine, value });
+  return value;
+}
+
+/** Report the same resolved model used by the scene, never infer it from the
+ * engine toggle alone (unsupported or edited systems may use catalog orbits). */
+export function describeBodyMotion(body: PlanetData, roots: PlanetData[], date: Date, highPrecision: boolean) {
+  if(body.id === 'sun') return {label:'固定的日心坐标原点',note:'当前没有进行全太阳系 N 体引力积分。'};
+  const parent=roots.find(p=>p.satellites?.some(m=>m.id===body.id));
+  const root=parent ?? roots.find(p=>p.id===body.id) ?? body;
+  const system=calculatePlanetarySystem(root,date,highPrecision);
+  const resolved=parent ? root.satellites!.find(m=>m.id===body.id)! : root;
+  const edited=root.isCustom||root.hasCustomOrbit||root.hasCustomDynamics;
+  if(!parent) return {
+    label:system.preciseParent?'高精度星历':'目录轨道（开普勒）',
+    note:system.preciseParent
+      ? '位置由天文引擎给出；按其天体中心或系统质心定义处理，不重复叠加偏移。'
+      : (edited?'此系统的质量、轨道或成员已修改，使用目录中的当前参数。':'按目录轨道参数和当前日期计算。')+'这不是逐帧引力积分。',
+  };
+  const relativePrecise=system.relativeStates.get(body.id)?.precise===true;
+  const anchor=system.preciseParent?'高精度星历':'目录轨道';
+  const relative=relativePrecise?'高精度星历':'开普勒轨道';
+  return {label:`${anchor} + ${relative}`,
+    note:`前者决定母体系统位置，后者决定卫星相对母体的位置。${relativePrecise?'':resolved.elements.periodDays?'相对公转以填写的周期为准。':'相对公转周期由轨道半长轴与母体、卫星质量推算。'}质量用于分配质心位置。`};
+}
+
+/** Shared by the camera, scene and event searches, including dwarf-planet moons. */
+export function calculateWorldPosition(id: string, bodies: PlanetData[], date: Date, highPrecision = false): Position {
+  if (id === 'sun') return zero();
+  const barycentric = id.startsWith('barycenter:');
+  const target = barycentric ? id.slice('barycenter:'.length) : id;
+  for (const parent of bodies) {
+    if (parent.id === target) {
+      const system = calculatePlanetarySystem(parent, date, highPrecision);
+      return barycentric ? system.barycenter : system.parentPosition;
+    }
+    if (parent.satellites?.some(m => m.id === target))
+      return calculatePlanetarySystem(parent, date, highPrecision).satellitePositions.get(target) ?? zero();
+  }
+  return zero();
+}
+
+/** Osculating local paths. Binary paths are exact for catalog Kepler motion;
+ * in multi-moon systems other moons are held at their current offsets. */
+const localOrbitCache = new WeakMap<OrbitalElements, { key: string; points: Position[] }>();
+function catalogLocalOrbit(elements: OrbitalElements, steps: number): Position[] {
+  const key = [elements.a, elements.e, elements.i, elements.N, elements.w, steps].join(':');
+  const cached = localOrbitCache.get(elements);
+  if (cached?.key === key) return cached.points;
+  const points = calculateOrbitPath(elements, steps);
+  localOrbitCache.set(elements, { key, points });
+  return points;
+}
+export function calculateSystemLocalOrbits(system: PlanetarySystem, steps = 180): Map<string, Position[]> {
+  const result = new Map<string, Position[]>();
+  let dominant: { moon: PlanetData; fraction: number; path: Position[] } | undefined;
+  for (const moon of system.parent.satellites ?? []) {
+    const state = system.relativeStates.get(moon.id);
+    if (!state) continue;
+    let path = catalogLocalOrbit(moon.elements, steps);
+    if (state.velocity) {
+      // Fit an osculating ellipse through the precise instantaneous state, so the
+      // high-precision Moon/Galilean moons sit on their displayed local paths.
+      const r = state.position, v = state.velocity, radius = norm(r);
+      const mu = Math.pow(deg2rad(0.9856076686), 2) * (positiveMass(system.parent)+positiveMass(moon));
+      const angular = cross(r, v), normal = times(angular, 1/norm(angular));
+      const ev = minus(times(cross(v, angular), 1/mu), times(r, 1/radius));
+      const e = norm(ev), a = 1/(2/radius - norm(v)**2/mu);
+      if (Number.isFinite(a) && a > 0 && e < 1 && norm(angular) > 0) {
+        const P = e > 1e-8 ? times(ev, 1/e) : times(r, 1/radius);
+        const Q = cross(normal, P), b = a*Math.sqrt(1-e*e);
+        path = Array.from({length:steps+1}, (_, i) => {
+          const E = 2*Math.PI*i/steps;
+          return plus(times(P, a*(Math.cos(E)-e)), times(Q, b*Math.sin(E)));
+        });
+      }
+    }
+    const fraction = system.massFractions.get(moon.id) ?? 0;
+    const otherOffset = plus(system.parentOffset, times(state.position, fraction));
+    result.set(moon.id, path.map(p => plus(otherOffset, times(p, 1-fraction))));
+    if (fraction > (dominant?.fraction ?? 0)) dominant = {moon, fraction, path};
+  }
+  if (dominant) {
+    const otherOffset = plus(system.parentOffset, times(system.relativeStates.get(dominant.moon.id)!.position, dominant.fraction));
+    result.set(system.parent.id, dominant.path.map(p => plus(otherOffset, times(p, -dominant.fraction))));
+  }
+  return result;
+}
+
 // --- 3D Vector Math Helpers ---
 
 const getPositionHelper = (id: string, date: Date, useHighPrecision: boolean, allBodies: PlanetData[]): Position => {
   if (id === 'sun') return { x: 0, y: 0, z: 0 };
-  const p = allBodies.find(x => x.id === id);
-  if (!p) return { x: 0, y: 0, z: 0 }; 
-  return calculateBodyPosition(id, p.elements, date, useHighPrecision);
+  return calculateWorldPosition(id, allBodies, date, useHighPrecision);
 };
 
 const subtractVectors = (a: Position, b: Position): Position => {

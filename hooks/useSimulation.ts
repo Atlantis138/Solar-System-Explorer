@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { AppSettings, SearchState, EventType, SimNotification, FoundEvent, PlanetData } from '../types';
+import { renderBudget } from '../core/renderBudget';
 import { MILLISECONDS_PER_DAY } from '../data/constants';
 import { isTransit, checkSpecificAlignment, calculateEventDuration, findOptimalEventTime, DEFAULT_SUN_ANGULAR_RADIUS_DEG } from '../utils/astronomy';
 
@@ -21,6 +22,8 @@ export const useSimulation = (settings: AppSettings, celestialBodies: PlanetData
 
   const requestRef = useRef<number>(0);
   const lastFrameTime = useRef<number>(0);
+  const nextFrameTime = useRef<number>(0);
+  const animateRef = useRef<(time:number)=>void>(()=>{});
   const lastRealTimeRef = useRef<number>(0);
   const lastEventGuardRef = useRef<{ key: string, start: number, end: number } | null>(null);
   
@@ -33,11 +36,22 @@ export const useSimulation = (settings: AppSettings, celestialBodies: PlanetData
   const animate = useCallback((time: number) => {
     if (lastFrameTime.current === 0) {
       lastFrameTime.current = time;
+      nextFrameTime.current = time + 1000/renderBudget(settings.renderSettings).simulationFps;
       lastRealTimeRef.current = Date.now();
-      requestRef.current = requestAnimationFrame(animate);
+      requestRef.current = requestAnimationFrame(time=>animateRef.current(time));
       return;
     }
 
+    // Throttle publication, not simulation time: accumulate the full elapsed
+    // interval, so every tier advances at exactly the same rate.
+    if (!searchState.active && time < nextFrameTime.current-.5) {
+      requestRef.current=requestAnimationFrame(time=>animateRef.current(time));
+      return;
+    }
+    // Keep an absolute cadence across 60/90/120/144 Hz displays; rounding every
+    // interval up to the next display frame would unnecessarily halve the rate.
+    const interval=1000/renderBudget(settings.renderSettings).simulationFps;
+    nextFrameTime.current += interval*Math.max(1,Math.floor((time-nextFrameTime.current)/interval)+1);
     const deltaTime = (time - lastFrameTime.current) / 1000; 
     lastFrameTime.current = time;
     
@@ -51,13 +65,13 @@ export const useSimulation = (settings: AppSettings, celestialBodies: PlanetData
     }
 
     if (searchState.isCalculating) {
-        requestRef.current = requestAnimationFrame(animate);
+        requestRef.current = requestAnimationFrame(time=>animateRef.current(time));
         return;
     }
 
-    if (searchState.active && searchState.type) {
+    if (settings.useHighPrecision && searchState.active && searchState.type) {
       if (settings.continuousIteration && searchState.continuousPaused) {
-         requestRef.current = requestAnimationFrame(animate);
+         requestRef.current = requestAnimationFrame(time=>animateRef.current(time));
          return;
       }
 
@@ -145,8 +159,10 @@ export const useSimulation = (settings: AppSettings, celestialBodies: PlanetData
       setCurrentDate(prevDate => new Date(prevDate.getTime() + daysToAdd * MILLISECONDS_PER_DAY));
       if (highlightedAlignment && !settings.showEventHighlights) setHighlightedAlignment(null);
     }
-    requestRef.current = requestAnimationFrame(animate);
+    requestRef.current = requestAnimationFrame(time=>animateRef.current(time));
   }, [isPlaying, speedMultiplier, searchState, currentDate, settings, highlightedAlignment, timeDirection, celestialBodies]);
+
+  animateRef.current = animate;
 
   const runCalculationBatch = useCallback(() => {
       if (!calcTargetRef.current) return;
@@ -223,6 +239,7 @@ export const useSimulation = (settings: AppSettings, celestialBodies: PlanetData
   }, [settings.useHighPrecision, settings.continuousIteration, timeDirection, celestialBodies]);
 
   const startSearch = (type: EventType, ids: string[], speed: any, strict: boolean, config: any, keepHistory: boolean) => {
+      if (!settings.useHighPrecision) return;
       if (settings.allowCalculationSearch) { startCalculation(type, ids, strict, config, keepHistory); return; }
       setHighlightedAlignment(null); lastEventGuardRef.current = null; const startTs = currentDate.getTime(); lastRealTimeRef.current = Date.now();
       setSearchState(prev => ({
@@ -234,6 +251,7 @@ export const useSimulation = (settings: AppSettings, celestialBodies: PlanetData
   };
 
   const startCalculation = (type: EventType, ids: string[], strict: boolean, config: any, keepHistory: boolean) => {
+      if (!settings.useHighPrecision) return;
       setIsPlaying(false); setHighlightedAlignment(null); lastEventGuardRef.current = null; const startTs = currentDate.getTime();
       calcDateRef.current = startTs; calcStartRef.current = Date.now();
       calcTargetRef.current = { type, ids, strictMode: strict, tolerance: config?.tolerance, solarRadius: config?.solarRadius };
@@ -257,10 +275,29 @@ export const useSimulation = (settings: AppSettings, celestialBodies: PlanetData
       setHighlightedAlignment(null); lastEventGuardRef.current = null;
   };
 
+  // Cancel both timer-based and animated searches when the engine is disabled.
+  // Keep previous results available if the user enables it again.
   useEffect(() => {
-    requestRef.current = requestAnimationFrame(animate);
-    return () => { if (requestRef.current) cancelAnimationFrame(requestRef.current); };
-  }, [animate]);
+    if (!settings.useHighPrecision) {
+      if (calculationTimeoutRef.current) clearTimeout(calculationTimeoutRef.current);
+      calculationTimeoutRef.current = undefined;
+      calcTargetRef.current = null;
+      setSearchState(prev => prev.active || prev.isCalculating
+        ? { ...prev, active: false, isCalculating: false, continuousPaused: false, status: '已停止：高精度引擎已关闭' } : prev);
+      setHighlightedAlignment(null);
+    }
+  }, [settings.useHighPrecision]);
+
+  const animationActive = (isPlaying || (searchState.active && !searchState.continuousPaused)) && !searchState.isCalculating;
+  useEffect(() => {
+    const restart = () => {
+      cancelAnimationFrame(requestRef.current);
+      lastFrameTime.current=0;lastRealTimeRef.current=Date.now();
+      if(animationActive && !document.hidden) requestRef.current=requestAnimationFrame(time=>animateRef.current(time));
+    };
+    restart();document.addEventListener('visibilitychange',restart);
+    return () => {cancelAnimationFrame(requestRef.current);document.removeEventListener('visibilitychange',restart);};
+  }, [animationActive]);
 
   return {
     currentDate, setCurrentDate, isPlaying, setIsPlaying, speedMultiplier, setSpeedMultiplier, timeDirection, setTimeDirection,

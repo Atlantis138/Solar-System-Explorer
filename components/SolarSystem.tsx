@@ -1,12 +1,14 @@
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import * as d3 from 'd3'; 
 import { AppSettings, PlanetData, PinnedPlanet, Position, RealStar, Constellation } from '../types';
 import StarField from './StarField';
 import SchematicSolarSystem from './renderers/SchematicSolarSystem';
 import TrueScaleSolarSystem from './renderers/TrueScaleSolarSystem';
-import { calculateBodyPosition, calculateSatellitePosition } from '../utils/astronomy';
-import { AU_SCALE_SCHEMATIC, AU_SCALE_TRUE } from '../data/constants';
+import { calculateWorldPosition } from '../utils/astronomy';
+import { AU_SCALE_SCHEMATIC, AU_SCALE_TRUE, SUN_DATA } from '../data/constants';
+
+const ORIGIN: Position = { x: 0, y: 0, z: 0 };
 
 interface SolarSystemProps {
   currentDate: Date;
@@ -49,10 +51,9 @@ const SolarSystem: React.FC<SolarSystemProps> = ({
   const prevDimensions = useRef({ w: window.innerWidth, h: window.innerHeight });
 
   const [zoomTransform, setZoomTransform] = useState<d3.ZoomTransform>(() => 
-    d3.zoomIdentity.translate(window.innerWidth / 2, window.innerHeight / 2).scale(0.8)
+    d3.zoomIdentity.translate(window.innerWidth / 2, window.innerHeight / 2).scale(settings.trueScale ? 0.8 * AU_SCALE_SCHEMATIC / AU_SCALE_TRUE : 0.8)
   );
   const [dimensions, setDimensions] = useState({ w: window.innerWidth, h: window.innerHeight });
-  const [centerOfRotation, setCenterOfRotation] = useState<Position>({ x: 0, y: 0, z: 0 });
 
   // 1. Handle Window Resize State Update
   useEffect(() => {
@@ -157,7 +158,7 @@ const SolarSystem: React.FC<SolarSystemProps> = ({
     const { w, h } = dimensions;
     
     // Default zooms
-    const targetScale = settings.trueScale ? 0.0025 : 0.8;
+    const targetScale = settings.trueScale ? 0.8 * AU_SCALE_SCHEMATIC / AU_SCALE_TRUE : 0.8;
     
     // Reset to center (Sun) and default scale with smooth easing
     const newTransform = d3.zoomIdentity.translate(w / 2, h / 2).scale(targetScale);
@@ -169,68 +170,56 @@ const SolarSystem: React.FC<SolarSystemProps> = ({
       
   }, [resetCameraFlag, settings.trueScale, dimensions]); 
 
-  // Handle Camera Focus Target Tracking (Center of Rotation)
+  // Explicit system view fits the local orbits once, then follows their barycenter.
   useEffect(() => {
-    let focusPos: Position = { x: 0, y: 0, z: 0 };
+    if (!cameraFocusId?.startsWith('barycenter:') || !settings.trueScale || !containerRef.current || !zoomBehaviorRef.current) return;
+    const roots = [...planets, ...dwarfs, ...asteroidsComets];
+    const parent = [SUN_DATA, ...roots, ...roots.flatMap(p => p.satellites ?? [])].find(p => p.id === cameraFocusId.slice(11));
+    if (!parent) return;
+    const radii = parent?.satellites?.filter(m => !m.isRing && m.elements).map(m => m.elements.a * (1+m.elements.e)) ?? [];
+    // With no satellites, the system centre is the body centre. Fit the disc
+    // rather than leaving the observer at the solar-system overview distance.
+    const radiusAU = radii.length ? Math.max(...radii) : Math.max(.00000001, (parent.relativeRadius ?? .1) / AU_SCALE_TRUE * 3);
+    const scale = Math.min(100000, Math.min(dimensions.w, dimensions.h) * .28 / (radiusAU * AU_SCALE_TRUE));
+    d3.select(containerRef.current).interrupt().call(zoomBehaviorRef.current.transform,
+      d3.zoomIdentity.translate(dimensions.w / 2, dimensions.h / 2).scale(scale));
+  }, [cameraFocusId, settings.trueScale]);
 
-    if (cameraFocusId) {
-        if (cameraFocusId === 'sun') {
-            focusPos = { x: 0, y: 0, z: 0 };
-        } else {
-            const allBodies = [...planets, ...dwarfs, ...asteroidsComets];
-            const planet = allBodies.find(p => p.id === cameraFocusId);
-            
-            if (planet) {
-                focusPos = calculateBodyPosition(planet.id, planet.elements, currentDate, settings.useHighPrecision);
-            } else if (settings.trueScale) {
-                for (const p of planets) {
-                    if (p.satellites) {
-                        const moon = p.satellites.find(m => m.id === cameraFocusId);
-                        if (moon) {
-                            const parentRaw = calculateBodyPosition(p.id, p.elements, currentDate, settings.useHighPrecision);
-                            const massMult = p.massRelativeToSun ? Math.sqrt(p.massRelativeToSun) : 0;
-                            focusPos = calculateSatellitePosition(moon.elements, parentRaw, currentDate, massMult, moon.id, settings.useHighPrecision);
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-    } else {
-        focusPos = { x: 0, y: 0, z: 0 };
-    }
+  // Handle Camera Focus Target Tracking (Center of Rotation)
+  const centerOfRotation = useMemo<Position>(() => {
+    const focusPos = calculateWorldPosition(cameraFocusId ?? 'sun', [...planets, ...dwarfs, ...asteroidsComets], currentDate, settings.useHighPrecision);
 
-    setCenterOfRotation(focusPos);
+    return focusPos.x === 0 && focusPos.y === 0 && focusPos.z === 0 ? ORIGIN : focusPos;
+  }, [cameraFocusId, currentDate, settings.trueScale, settings.useHighPrecision, planets, dwarfs, asteroidsComets]);
+
+  useEffect(() => {
 
     if (cameraFocusId && containerRef.current && zoomBehaviorRef.current) {
         const { w, h } = dimensions;
-        const currentK = zoomTransform.k;
+        const currentK = d3.zoomTransform(containerRef.current).k;
         const newTransform = d3.zoomIdentity.translate(w / 2, h / 2).scale(currentK);
         d3.select(containerRef.current).call(zoomBehaviorRef.current.transform, newTransform);
     }
-  }, [cameraFocusId, currentDate, dimensions, settings.trueScale, settings.useHighPrecision, planets, dwarfs, asteroidsComets]); 
+  }, [cameraFocusId, dimensions]);
 
 
   return (
     <div ref={containerRef} className="w-full h-full bg-black cursor-move relative overflow-hidden">
-      <div className="absolute inset-0 pointer-events-none bg-black" style={{ filter: `brightness(${settings.starBrightness})` }}>
-         {settings.background === 'milkyway' ? (
-             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_#080808_0%,_#000000_100%)]"></div>
-         ) : (
-             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_#111_0%,_#000_100%)]"></div>
-         )}
-         <StarField 
-            settings={settings} 
+      <div className="absolute inset-0 pointer-events-none bg-black">
+         <div className="absolute inset-0 bg-[#020306]" />
+         {settings.skyEnabled !== false && <StarField
+            settings={settings}
+            focalPixels={settings.enablePerspective && !settings.enableProximitySim ? 60 * (settings.trueScale ? AU_SCALE_TRUE : AU_SCALE_SCHEMATIC) * zoomTransform.k : undefined}
             realStars={realStars} 
             constellations={constellations}
-         />
+         />}
       </div>
       
       {settings.trueScale ? (
         <TrueScaleSolarSystem 
             currentDate={currentDate} settings={settings} onPlanetSelect={onPlanetSelect} selectedPlanetId={selectedPlanetId}
             highlightedAlignment={highlightedAlignment} pinnedPlanets={pinnedPlanets} zoomTransform={zoomTransform}
-            dimensions={dimensions} centerOfRotation={centerOfRotation}
+            dimensions={dimensions} centerOfRotation={centerOfRotation} cameraFocusId={cameraFocusId}
             planets={planets} dwarfs={dwarfs} asteroidsComets={asteroidsComets}
             visibilityMap={visibilityMap}
         />
@@ -238,14 +227,14 @@ const SolarSystem: React.FC<SolarSystemProps> = ({
         <SchematicSolarSystem 
             currentDate={currentDate} settings={settings} onPlanetSelect={onPlanetSelect} selectedPlanetId={selectedPlanetId}
             highlightedAlignment={highlightedAlignment} pinnedPlanets={pinnedPlanets} zoomTransform={zoomTransform}
-            dimensions={dimensions} centerOfRotation={centerOfRotation}
+            dimensions={dimensions} centerOfRotation={centerOfRotation} cameraFocusId={cameraFocusId}
             planets={planets} dwarfs={dwarfs} asteroidsComets={asteroidsComets}
             visibilityMap={visibilityMap}
         />
       )}
 
       {/* Minimalist Compact Watermark Camera Info - Bottom Left */}
-      <div className="absolute bottom-3 left-4 pointer-events-none z-20 flex flex-col gap-px select-none text-gray-600 text-[7px] font-mono font-bold tracking-widest uppercase">
+      <div data-camera-info className="absolute top-3 left-4 pointer-events-none z-20 flex flex-col gap-px select-none text-gray-600 text-[10px] font-mono font-bold tracking-widest uppercase">
          <span className="flex items-center gap-2"><span>TGT</span> <span>{getTargetName()}</span></span>
          <span className="flex items-center gap-2"><span>ZM</span> <span>{zoomTransform.k.toExponential(1)}x</span></span>
          <span className="flex items-center gap-2"><span>TILT</span> <span>{settings.viewTilt.toFixed(0)}°</span></span>

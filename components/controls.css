@@ -1,0 +1,21 @@
+/* Keep captions legible and all transport tools reachable on narrow phones.
+   Reflow instead of shrinking type or hiding controls in a horizontal scroller. */
+@media (max-width: 600px) {
+  .simulation-toolbar.simulation-toolbar {
+    display: grid;
+    grid-template-columns: 40px 40px minmax(0, 1fr);
+    gap: 8px;
+    width: 90vw;
+    padding: 12px 16px;
+    border-radius: 24px;
+    overflow: visible;
+  }
+  .simulation-toolbar > :nth-child(3) { grid-column: 3; grid-row: 1; justify-self: end; }
+  .simulation-toolbar > :nth-child(4),
+  .simulation-toolbar > :nth-child(6) { display: none; }
+  .simulation-toolbar > :nth-child(5) {
+    grid-column: 1 / 4; grid-row: 2; justify-self: start;
+    min-width: 0; width: max-content;
+  }
+  .simulation-toolbar > :nth-child(7) { grid-column: 3; grid-row: 2; justify-self: end; }
+}

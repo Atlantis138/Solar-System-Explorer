@@ -1,11 +1,14 @@
 
 
 import { AppSettings } from '../types';
+import { DEFAULT_ORBIT_CATEGORY_OPACITY } from '../core/orbitCategories';
+import { SKY_DEFAULTS } from '../core/skySettings';
 import { DEFAULT_SUN_ANGULAR_RADIUS_DEG } from '../utils/astronomy';
 
 export const SYSTEM_DEFAULTS: AppSettings = {
-  orbitOpacity: 1.0, 
-  orbitPerspectiveIntensity: 4.0, 
+  orbitOpacity: 1.0,
+  orbitCategoryOpacity: {...DEFAULT_ORBIT_CATEGORY_OPACITY},
+  orbitPerspectiveIntensity: 1.0,
   trueScale: false,
   showDwarfPlanets: false, 
   showAsteroidBelt: true, 
@@ -16,28 +19,19 @@ export const SYSTEM_DEFAULTS: AppSettings = {
   allowCalculationSearch: false, 
   continuousIteration: false,
   background: 'default',
-  starBrightness: 0.5, 
+  starBrightness: 1,
   starDensity: 1500, 
   
-  // Real Stars Defaults
-  useRealStars: false,
-  realStarBrightnessMultiplier: 1.0,
-  realStarLabels: 'none',
-  showConstellations: false,
-  constellationBrightnessMultiplier: 1.0,
-
-  showEclipticGrid: false,
-  showEquatorialGrid: false,
-  gridOpacity: 0.7,
-  convergeMeridians: false,
-  renderSettings: { innerQuality: 'eco', outerQuality: 'eco', cometQuality: 'performance', allowTrueScaleAllBodies: false },
+  ...SKY_DEFAULTS,
+  renderSettings: { sceneQuality: 'standard', innerQuality: 'eco', outerQuality: 'eco', cometQuality: 'performance' },
   transitTolerance: 1.0,
   alignmentTolerance: 10.0,
   strictSolarRadius: DEFAULT_SUN_ANGULAR_RADIUS_DEG,
   viewTilt: 90, 
   viewYaw: 0, 
   showCameraControl: false,
+  cameraSettingsVersion: 2,
   enableSpaceView: false, 
   enablePerspective: false,
-  enableProximitySim: false
+  enableProximitySim: true
 };

@@ -1,3 +1,4 @@
+import './controls.css';
 
 import React, { useState, useEffect, useCallback } from 'react';
 
@@ -15,6 +16,7 @@ interface ControlsProps {
   onOpenSettings: () => void;
   onOpenEvents: () => void;
   searchActive: boolean;
+  searchEnabled: boolean;
 }
 
 interface DatePickerModalProps {
@@ -258,7 +260,7 @@ const Controls: React.FC<ControlsProps> = ({
   onResetTime,
   onOpenSettings,
   onOpenEvents,
-  searchActive
+  searchActive, searchEnabled
 }) => {
   const [showDatePicker, setShowDatePicker] = useState(false);
 
@@ -296,7 +298,7 @@ const Controls: React.FC<ControlsProps> = ({
   return (
     <>
       <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 w-auto max-w-[90vw] md:max-w-3xl lg:max-w-4xl flex justify-center z-40 pointer-events-none">
-        <div className="bg-gray-900/80 backdrop-blur-md rounded-full px-4 py-2 md:px-6 md:py-3 border border-gray-700 flex items-center gap-2 md:gap-4 shadow-2xl pointer-events-auto transition-all duration-300 overflow-x-auto custom-scrollbar shrink-0 max-w-full">
+        <div className="simulation-toolbar bg-gray-900/80 backdrop-blur-md rounded-full px-4 py-2 md:px-6 md:py-3 border border-gray-700 flex items-center gap-2 md:gap-4 shadow-2xl pointer-events-auto transition-all duration-300 overflow-x-auto custom-scrollbar shrink-0 max-w-full">
           
           {/* Reverse Toggle Button */}
           <button
@@ -334,7 +336,7 @@ const Controls: React.FC<ControlsProps> = ({
               <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" /></svg>
             </button>
             <div className="flex flex-col justify-center items-center w-14 md:w-20 shrink-0">
-              <span className="text-[8px] md:text-[10px] text-gray-500 uppercase tracking-wider text-center w-full">速率 (Rate)</span>
+              <span className="text-[10px] md:text-[10px] text-gray-500 uppercase tracking-wider text-center w-full">速率<span className="hidden sm:inline"> (Rate)</span></span>
               <span className="font-mono font-bold text-blue-400 text-xs md:text-sm text-center w-full">
                 {Math.abs(speedMultiplier)}x
               </span>
@@ -348,7 +350,7 @@ const Controls: React.FC<ControlsProps> = ({
 
           {/* Date Display & Trigger */}
           <div className={`flex flex-col items-center justify-center relative group min-w-[140px] md:w-48 shrink-0 ${searchActive ? 'opacity-50 pointer-events-none' : ''}`}>
-            <span className="text-[8px] md:text-[10px] text-gray-500 uppercase tracking-wider text-center w-full">当前日期 (Date)</span>
+            <span className="text-[10px] md:text-[10px] text-gray-500 uppercase tracking-wider text-center w-full">当前日期<span className="hidden sm:inline"> (Date)</span></span>
             <div 
               onClick={handleOpenDatePicker}
               className="font-mono text-sm md:text-base font-semibold text-white cursor-pointer hover:text-blue-300 transition-colors whitespace-nowrap w-full text-left pl-6 md:pl-8 relative"
@@ -364,9 +366,9 @@ const Controls: React.FC<ControlsProps> = ({
 
           {/* Right Group (Tools) */}
           <div className="flex items-center gap-0.5 md:gap-1 shrink-0">
-            <button onClick={onOpenEvents} className="p-1.5 md:p-2 text-gray-400 hover:text-purple-400 hover:bg-gray-800 rounded-full transition-all">
+            {searchEnabled && <button aria-label="天象搜索" onClick={onOpenEvents} className="p-1.5 md:p-2 text-gray-400 hover:text-purple-400 hover:bg-gray-800 rounded-full transition-all">
               <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-            </button>
+            </button>}
             
             <button onClick={onResetTime} className="p-1.5 md:p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-all" title="Reset to Now">
               <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -374,7 +376,7 @@ const Controls: React.FC<ControlsProps> = ({
               </svg>
             </button>
             
-            <button onClick={onOpenSettings} className="p-1.5 md:p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-all">
+            <button aria-label="打开设置" onClick={onOpenSettings} className="p-1.5 md:p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-all">
               <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
             </button>
           </div>

@@ -7,6 +7,8 @@ export interface OrbitalElements {
   a: number; // Semi-major axis (AU)
   e: number; // Eccentricity
   M: number; // Mean anomaly (deg)
+  epochJD?: number; // Defaults to J2000
+  periodDays?: number; // Optional measured sidereal period
 }
 
 export interface PlanetData {
@@ -16,7 +18,10 @@ export interface PlanetData {
   color: string;
   radius: number; // Relative visual radius (Schematic)
   relativeRadius: number; // Radius relative to Earth (Earth = 1) for True Scale
-  massRelativeToSun?: number; // Mass ratio relative to Sun (for Satellite Kepler physics)
+  massRelativeToSun?: number; // Individual body mass, never combined system mass
+  orbitReference?: 'body' | 'system-barycenter' | 'parent';
+  ephemerisReference?: 'body' | 'system-barycenter';
+  parentId?: string;
   elements: OrbitalElements; // J2000 elements
   satellites?: PlanetData[]; // Recursive structure for Moons
   
@@ -33,24 +38,44 @@ export interface PlanetData {
   // Data Management Props (New Phase 1)
   visible: boolean;        // Toggle visibility in rendering
   isCustom: boolean;       // Loaded from LocalStorage
+  isOverridden?: boolean; // Local edit of a built-in entry; the original remains recoverable
+  originalRawContent?: string;
+  hasCustomOrbit?: boolean; // Catalog orbital parameters supersede a built-in ephemeris
+  hasCustomDynamics?: boolean; // A changed mass/member requires recalculating this system
+  dataWarnings?: string[];
   isValid: boolean;        // Parsed successfully
   parseError?: string;     // Error details if invalid
   rawContent?: string;     // Original text block for editing
   category: string;        // The [TAG] used in data file
+  description?: string;
+  dataSource?: string;
+}
+
+/** Statistical populations are catalog objects, not point masses or planets. */
+export interface SmallBodyPopulation {
+  id: string; kind: 'population'; name: string; englishName: string;
+  distribution: 'belt' | 'trojan'; color: string; defaultVisible: boolean;
+  semiMajorAxisAU: [number,number]; eccentricity: [number,number]; maxInclinationDeg: number;
+  weight: number; description: string; sourceUrl: string;
+  referenceBodyId?: string;
 }
 
 export interface RealStar {
   id: string;
   name: string;
-  ra: number; // Degrees
+  englishName?: string;
+  ra: number; // J2000 degrees
   dec: number; // Degrees
   mag: number; // Apparent Magnitude
   color: string;
 }
 
 export interface Constellation {
+  id?: string;
   name: string;
   lines: string[][]; // Array of [starId1, starId2] pairs
+  labelPositions?: [number, number][]; // J2000 RA/Dec degrees; Serpens has two regions
+  boundaries?: [number, number][][]; // Closed, sampled J2000 boundary rings
 }
 
 export interface Position {
@@ -80,18 +105,22 @@ export type RenderQuality = 'eco' | 'standard' | 'performance';
 export type StarLabelOption = 'none' | 'cn' | 'bilingual';
 
 export interface RenderSettings {
-  innerQuality: RenderQuality;  // Inner Solar System (Mercury - Asteroid Belt)
-  outerQuality: RenderQuality;  // Outer/Dwarf (Jupiter+, TNOs)
+  sceneQuality?: RenderQuality; // Shared geometry, particle and playback budget
+  innerQuality: RenderQuality;  // Planets and satellites
+  outerQuality: RenderQuality;  // Dwarf planets
   cometQuality: RenderQuality;  // Small Bodies (Comets & Asteroids)
-  allowTrueScaleAllBodies: boolean; // Decouple True Scale from body visibility
 }
+
+export type OrbitCategory = 'planet' | 'satellite' | 'dwarf' | 'comet' | 'asteroid';
 
 export interface AppSettings {
   orbitOpacity: number; // 0.0 to 1.0
-  orbitPerspectiveIntensity: number; // 0.0 to 8.0, controls thickness scaling in 3D
+  orbitCategoryOpacity?: Partial<Record<OrbitCategory,number>>;
+  orbitPerspectiveIntensity: number; // 0 to 2, depth contrast; 1 = default
   trueScale: boolean;
   showDwarfPlanets: boolean; 
   showAsteroidBelt: boolean; 
+  populationVisibility?: Record<string,boolean>;
   showAsteroidsComets: boolean; 
   showRegionLabels: boolean; // "Show Frontiers"
   useHighPrecision: boolean; 
@@ -105,11 +134,18 @@ export interface AppSettings {
   starDensity: number; 
   
   // Real Star & Constellation Settings
+  skyEnabled: boolean;
   useRealStars: boolean;
-  realStarBrightnessMultiplier: number; // 0.5 to 3.0
+  realStarMagnitudeLimit: number; // Apparent magnitude; larger values show fainter stars
+  realStarBrightnessMultiplier: number; // Gain: 1 = calibrated default
   realStarLabels: StarLabelOption;
   showConstellations: boolean;
-  constellationBrightnessMultiplier: number; // 0.5 to 3.0
+  showConstellationNames: boolean;
+  showConstellationBoundaries: boolean;
+  constellationBrightnessMultiplier: number; // Gain: 1 = calibrated default
+  starLabelBrightness: number; // Gain: 1 = calibrated default
+  skySettingsVersion: number;
+  cameraSettingsVersion: number;
 
   // Grid Settings
   showEclipticGrid: boolean;
