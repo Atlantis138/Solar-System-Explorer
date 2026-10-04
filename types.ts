@@ -129,6 +129,9 @@ export interface AppSettings {
   showComets?: boolean;
   showAsteroids?: boolean;
   showInterstellar?: boolean;
+  showAsteroidOrbits?: boolean;
+  showCometOrbits?: boolean;
+  showInterstellarOrbits?: boolean;
   showCometTails?: boolean;
   showInterstellarTails?: boolean;
   showNonMainBeltPopulations?: boolean;

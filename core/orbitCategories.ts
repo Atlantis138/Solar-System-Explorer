@@ -1,3 +1,4 @@
+import { smallBodyOrbitEnabled } from './smallBodySettings';
 import type { AppSettings, OrbitCategory, PlanetData } from '../types';
 
 export const ORBIT_CATEGORIES: Record<OrbitCategory, { label:string; width:number; opacity:number }> = {
@@ -23,6 +24,7 @@ export function categoryOrbitOpacity(settings:AppSettings,category:OrbitCategory
 }
 /** The global slider and category slider multiply; zero always means off, even for a selected body. */
 export function bodyOrbitOpacity(body:PlanetData,settings:AppSettings):number {
+  if (!smallBodyOrbitEnabled(body,settings)) return 0;
   return Math.max(0,Math.min(1,settings.orbitOpacity))*categoryOrbitOpacity(settings,orbitCategoryForBody(body));
 }
 export function categoryOrbitWidth(category:OrbitCategory='planet',emphasized=false):number {

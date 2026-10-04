@@ -97,7 +97,7 @@ test('comet tails point away from the Sun on both inbound and outbound legs and 
 test('tail drawing respects the switch and each mobile rendering budget in both proportion modes',()=>{
  const b=visitors.find(b=>b.id==='borisov'),tp=date(b.elements.perihelionTimeJD),p=calculateBodyPosition(b.id,b.elements,tp);
  for(const trueScale of [false,true])for(const sceneQuality of ['eco','standard','performance']){
-  const settings={...SYSTEM_DEFAULTS,trueScale,showAsteroidsComets:true,showComets:false,showInterstellar:true,showCometTails:false,renderSettings:{...SYSTEM_DEFAULTS.renderSettings,sceneQuality}};
+  const settings={...SYSTEM_DEFAULTS,trueScale,showAsteroidsComets:true,showComets:false,showInterstellar:true,showInterstellarTails:true,showCometTails:false,renderSettings:{...SYSTEM_DEFAULTS.renderSettings,sceneQuality}};
   const scene=createSceneView({scale:65,settings,zoom:{x:400,y:300,k:2},width:800,height:600,center:p});let strokes=0;
   const ctx={save(){},restore(){},beginPath(){},moveTo(){},lineTo(){},stroke(){strokes++},arc(){},fill(){},createRadialGradient(){return {addColorStop(){}}}};
   drawCometTails(ctx,[b],tp,scene,settings);assert.ok(strokes>0);assert.ok(strokes<=renderBudget(settings.renderSettings).tailSegments*2);
@@ -123,4 +123,15 @@ test('v1 preferences migrate to independent tails and unified non-main populatio
  assert.equal(migrateSmallBodySettings({...before,showAsteroidsComets:false}).showNonMainBeltPopulations,false);
  assert.equal(migrateSmallBodySettings({...before,showSmallBodyPopulations:false}).showNonMainBeltPopulations,false);
  assert.deepEqual(migrateSmallBodySettings(after),after);
+});
+
+test('default decorations enable comet tails but require opting into interstellar tails',()=>{
+ assert.equal(SYSTEM_DEFAULTS.showCometOrbits,true);assert.equal(SYSTEM_DEFAULTS.showCometTails,true);
+ assert.equal(SYSTEM_DEFAULTS.showInterstellarOrbits,true);assert.equal(SYSTEM_DEFAULTS.showInterstellarTails,false);
+ const s={...SYSTEM_DEFAULTS,showAsteroidsComets:true,showComets:true,showInterstellar:true};
+ assert.equal(cometTailVisible(catalog.allObjects.find(b=>b.id==='halley'),s),true);
+ for(const b of visitors)assert.equal(cometTailVisible(b,s),false);
+ assert.equal(migrateSmallBodySettings({showAsteroidsComets:true,showCometTails:true}).showInterstellarTails,false);
+ const stored={...s,smallBodySettingsVersion:2,showInterstellarTails:true,showCometOrbits:false};
+ assert.deepEqual(migrateSmallBodySettings(stored),stored,'explicit saved preferences remain intact');
 });

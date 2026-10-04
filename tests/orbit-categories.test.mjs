@@ -46,3 +46,20 @@ test('Arrokoth name migration preserves local orbital edits and separately chose
   assert.equal(b.elements.a,45);assert.ok(b.rawContent.includes(`name: ${b.name}`));
  }
 });
+
+test('three orbit switches are independent across scale modes and compose with intensity',()=>{
+ const visitors=[{...body('asteroid'),interstellar:true},{...body('comet'),interstellar:true}];
+ for(const trueScale of [false,true])for(const showAsteroidOrbits of [false,true])for(const showCometOrbits of [false,true])for(const showInterstellarOrbits of [false,true]){
+  const settings={...SYSTEM_DEFAULTS,trueScale,showAsteroidOrbits,showCometOrbits,showInterstellarOrbits};
+  assert.equal(bodyOrbitOpacity(body('asteroid'),settings),showAsteroidOrbits?.3:0);
+  assert.equal(bodyOrbitOpacity(body('comet'),settings),showCometOrbits?.4:0);
+  assert.equal(bodyOrbitOpacity(body('planet'),settings),1);
+  for(const visitor of visitors){
+   assert.equal(bodyOrbitOpacity(visitor,settings),showInterstellarOrbits?(visitor.type==='comet'?.4:.3):0);
+   assert.equal(bodyOrbitOpacity(visitor,{...settings,orbitOpacity:0}),0);
+  }
+ }
+ const legacy={...SYSTEM_DEFAULTS};delete legacy.showAsteroidOrbits;delete legacy.showCometOrbits;delete legacy.showInterstellarOrbits;
+ assert.equal(bodyOrbitOpacity(body('asteroid'),legacy),.3);
+ assert.equal(bodyOrbitOpacity(visitors[1],legacy),.4);
+});

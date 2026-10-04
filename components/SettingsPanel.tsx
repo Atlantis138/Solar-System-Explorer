@@ -75,18 +75,31 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               {settings.showAsteroidsComets && <div className="settings-small-bodies" role="group" aria-label="彗星与小行星详细设置">
                 <div className="settings-compact-row" role="group" aria-label="小行星设置">
                   <span>小行星</span>
-                  <CompactChoice label="天体" ariaLabel="显示小行星" checked={settings.showAsteroids !== false} onChange={value => set({showAsteroids:value})} />
-                  <CompactChoice label="非主带族群" ariaLabel="显示非主带族群" checked={settings.showNonMainBeltPopulations === true} onChange={value => set({showNonMainBeltPopulations:value})} />
+                  <div className="settings-compact-options">
+                    <CompactChoice label="天体" ariaLabel="显示小行星" checked={settings.showAsteroids !== false} onChange={value => set({showAsteroids:value})} />
+                    {settings.showAsteroids !== false && <CompactChoice label="轨道" ariaLabel="显示小行星轨道" checked={settings.showAsteroidOrbits !== false} onChange={value => set({showAsteroidOrbits:value})} />}
+                    <CompactChoice label="非主带族群" ariaLabel="显示非主带族群" checked={settings.showNonMainBeltPopulations === true} onChange={value => set({showNonMainBeltPopulations:value})} />
+                  </div>
                 </div>
                 <div className="settings-compact-row" role="group" aria-label="彗星设置">
                   <span>彗星</span>
-                  <CompactChoice label="天体" ariaLabel="显示彗星" checked={settings.showComets !== false} onChange={value => set({showComets:value})} />
-                  <CompactChoice label="彗尾" ariaLabel="显示彗星彗尾" checked={settings.showCometTails !== false} onChange={value => set({showCometTails:value})} />
+                  <div className="settings-compact-options">
+                    <CompactChoice label="天体" ariaLabel="显示彗星" checked={settings.showComets !== false} onChange={value => set({showComets:value})} />
+                    {settings.showComets !== false && <>
+                      <CompactChoice label="轨道" ariaLabel="显示彗星轨道" checked={settings.showCometOrbits !== false} onChange={value => set({showCometOrbits:value})} />
+                      <CompactChoice label="彗尾" ariaLabel="显示彗星彗尾" checked={settings.showCometTails !== false} onChange={value => set({showCometTails:value})} />
+                    </>}
+                  </div>
                 </div>
                 <div className="settings-compact-row" role="group" aria-label="星际天体设置">
                   <span>星际天体</span>
-                  <CompactChoice label="天体" ariaLabel="显示星际天体" checked={settings.showInterstellar !== false} onChange={value => set({showInterstellar:value})} />
-                  <CompactChoice label="彗尾（若有）" ariaLabel="显示星际彗尾" checked={settings.showInterstellarTails !== false} onChange={value => set({showInterstellarTails:value})} />
+                  <div className="settings-compact-options">
+                    <CompactChoice label="天体" ariaLabel="显示星际天体" checked={settings.showInterstellar !== false} onChange={value => set({showInterstellar:value})} />
+                    {settings.showInterstellar !== false && <>
+                      <CompactChoice label="轨道" ariaLabel="显示星际天体轨道" checked={settings.showInterstellarOrbits !== false} onChange={value => set({showInterstellarOrbits:value})} />
+                      <CompactChoice label="彗尾" ariaLabel="显示星际彗尾（若有）" checked={settings.showInterstellarTails === true} onChange={value => set({showInterstellarTails:value})} />
+                    </>}
+                  </div>
                 </div>
               </div>}
               <Toggle label="显示太阳系边界" description="柯伊伯带与日球层顶" checked={settings.showRegionLabels} onChange={value => set({ showRegionLabels: value })} />

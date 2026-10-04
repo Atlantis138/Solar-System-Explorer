@@ -8,10 +8,18 @@ export function smallBodyVisible(body: PlanetData, settings: AppSettings): boole
   return body.type === 'comet' ? settings.showComets !== false : settings.showAsteroids !== false;
 }
 
+/** Gates only orbit decoration; body visibility and intensity remain separate. */
+export function smallBodyOrbitEnabled(body: PlanetData, settings: AppSettings): boolean {
+  if (body.interstellar) return settings.showInterstellarOrbits !== false;
+  if (body.type === 'comet') return settings.showCometOrbits !== false;
+  if (body.type === 'asteroid') return settings.showAsteroidOrbits !== false;
+  return true;
+}
+
 /** Each origin has its own tail switch, independent of the ordinary comet row. */
 export function cometTailVisible(body: PlanetData, settings: AppSettings): boolean {
   return body.type === 'comet' && smallBodyVisible(body,settings) &&
-    (body.interstellar ? settings.showInterstellarTails !== false : settings.showCometTails !== false);
+    (body.interstellar ? settings.showInterstellarTails === true : settings.showCometTails !== false);
 }
 
 /** Version 2 restores the main belt's independent catalog switch and merges
@@ -29,7 +37,7 @@ export function migrateSmallBodySettings(saved: Partial<AppSettings>): Partial<A
     showAsteroidsComets: (master && (comets || asteroids || interstellar)) || nonMain,
     showComets: comets, showAsteroids: asteroids, showInterstellar: interstellar,
     showCometTails: saved.showCometTails !== false,
-    showInterstellarTails: saved.showCometTails !== false,
+    showInterstellarTails: saved.showInterstellarTails === true,
     showNonMainBeltPopulations: nonMain };
 }
 
