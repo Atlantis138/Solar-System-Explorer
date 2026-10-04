@@ -1,7 +1,7 @@
+import FloatingPanel from './FloatingPanel';
 
 
 import React, { useState, useMemo } from 'react';
-import { createPortal } from 'react-dom';
 import './object-manager.css';
 import PopulationCatalog, { PopulationParameters } from './PopulationCatalog';
 import OrbitCategoryControl from './OrbitCategoryControl';
@@ -310,12 +310,12 @@ const ObjectManager: React.FC<ObjectManagerProps> = ({ bodies, settings, onSetti
       }
   };
 
-  return createPortal(
-    <div className="catalog-overlay fixed inset-0 z-[60] flex items-center justify-center bg-black/80" onClick={onClose}>
+  return (
+    <FloatingPanel id="catalog" title="天体目录" side="center" top={28} className="panel-catalog" onClose={onClose}>
       
       {/* --- Custom Confirmation Modal Overlay --- */}
       {confirmModal.isOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in" onClick={(e) => e.stopPropagation()}>
+        <div role="dialog" aria-modal="true" aria-label="确认目录操作" className="absolute inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in" onClick={(e) => e.stopPropagation()}>
            <div className="bg-gray-800 border border-gray-600 rounded-xl p-6 w-96 shadow-2xl transform scale-100 transition-all">
               <h3 className="text-xl font-bold text-white mb-2">{confirmModal.message}</h3>
               {confirmModal.subMessage && <p className="text-gray-400 text-sm mb-6">{confirmModal.subMessage}</p>}
@@ -339,14 +339,10 @@ const ObjectManager: React.FC<ObjectManagerProps> = ({ bodies, settings, onSetti
       )}
 
       {/* Main Modal Container */}
-      <div role="dialog" aria-modal="true" aria-label="天体目录" className="catalog-dialog bg-gray-900 border border-gray-700/50 rounded-xl w-[95%] md:w-[90%] max-w-6xl mx-auto flex flex-col shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="catalog-dialog bg-gray-900 border border-gray-700/50 rounded-xl w-[95%] md:w-[90%] max-w-6xl mx-auto flex flex-col shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         
         {/* Header */}
         <div className="flex items-center justify-between gap-2 p-3 sm:p-4 border-b border-gray-700/50 bg-gray-800/50 shrink-0">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            <svg className="w-6 h-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
-            天体目录 <span className="hidden md:inline text-base text-gray-400">Object List</span>
-          </h2>
           <div className="flex items-center gap-2 sm:gap-4">
             <label className="hidden md:flex items-center gap-2 text-sm text-gray-300 cursor-pointer select-none">
               <input type="checkbox" checked={showIds} onChange={() => setShowIds(!showIds)} className="rounded bg-gray-700 border-gray-600" />
@@ -361,9 +357,7 @@ const ObjectManager: React.FC<ObjectManagerProps> = ({ bodies, settings, onSetti
               {isEditorOpen ? '关闭编辑' : '添加天体'}
             </button>
 
-            <button onClick={onClose} aria-label="关闭天体目录" className="p-2 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white transition-colors">
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
+
           </div>
         </div>
 
@@ -518,8 +512,7 @@ const ObjectManager: React.FC<ObjectManagerProps> = ({ bodies, settings, onSetti
         </div>
 
       </div>
-    </div>,
-    document.body
+    </FloatingPanel>
   );
 };
 

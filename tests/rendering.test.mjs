@@ -83,13 +83,14 @@ const { orbitSegmentStyle, drawOrbitPaths } = await importTs(new URL('../core/or
 test('overview perspective visibly separates near and far geometry at both physical scales', () => {
   const settings = { ...SYSTEM_DEFAULTS, viewTilt: 7, viewYaw: 0, enablePerspective: true, enableProximitySim: false };
   for (const scale of [65, 24000]) {
-    const near = project3D({ x: 5, y: -25, z: 0 }, scale, settings, 0.8);
-    const far = project3D({ x: 5, y: 25, z: 0 }, scale, settings, 0.8);
+    const zoom = .8 * 65 / scale;
+    const near = project3D({ x: 5, y: -25, z: 0 }, scale, settings, zoom);
+    const far = project3D({ x: 5, y: 25, z: 0 }, scale, settings, zoom);
     assert.ok(near.scaleFactor / far.scaleFactor > 2, 'finite camera must have visible perspective');
     assert.ok(near.x > far.x && near.isVisible && far.isVisible);
-    const behind = project3D({ x: 1, y: -100, z: 0 }, scale, settings, 0.8);
+    const behind = project3D({ x: 1, y: -100, z: 0 }, scale, settings, zoom);
     assert.equal(behind.isVisible, false);
-    const ortho = project3D({ x: 5, y: -25, z: 0 }, scale, { ...settings, enablePerspective: false }, 0.8);
+    const ortho = project3D({ x: 5, y: -25, z: 0 }, scale, { ...settings, enablePerspective: false }, zoom);
     assert.equal(ortho.scaleFactor, 1);
   }
 });

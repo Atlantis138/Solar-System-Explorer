@@ -1,159 +1,99 @@
+import React, { useEffect, useRef, useState } from 'react';
+import './camera-controls.css';
 
-import React, { useRef, useState, useEffect, useLayoutEffect } from 'react';
-
-interface VirtualJoystickProps {
-  onUpdate: (dYaw: number, dTilt: number) => void;
-  onReset: () => void;
-  show3DToggle?: boolean;
-  is3DEnabled?: boolean;
-  onToggle3D?: () => void;
-  isProximityEnabled?: boolean;
-  onToggleProximity?: () => void;
-  isSidebarOpen?: boolean; // Deprecated but kept for interface compatibility
+export interface NavigationInput { yaw:number; pitch:number; roll:number; right:number; down:number; forward:number }
+interface Props {
+  enabled:boolean;
+  onInput:(input:NavigationInput)=>void;
+  onReset:()=>void;
+  onModeChange:()=>void;
+  roaming:boolean;
+  stellar:boolean;
+  travelLabel:string;
 }
-
-export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({ 
-  onUpdate, 
-  onReset, 
-  show3DToggle = false,
-  is3DEnabled = false,
-  onToggle3D,
-  isProximityEnabled = false,
-  onToggleProximity,
-}) => {
-  const [active, setActive] = useState(false);
-  const [knobPos, setKnobPos] = useState({ x: 0, y: 0 });
-  
-  const containerRef = useRef<HTMLDivElement>(null);
-  const startPosRef = useRef({ x: 0, y: 0 });
-  const lastPosRef = useRef({ x: 0, y: 0 });
-  
-  const pointerRef = useRef<number | null>(null);
-  const frameRef = useRef(0);
-  const pendingRef = useRef({ yaw: 0, tilt: 0 });
-  const onUpdateRef = useRef(onUpdate);
-  useLayoutEffect(() => { onUpdateRef.current = onUpdate; }, [onUpdate]);
-  useEffect(() => () => cancelAnimationFrame(frameRef.current), []);
-
-  const flushMovement = () => {
-    cancelAnimationFrame(frameRef.current);
-    frameRef.current = 0;
-    const { yaw, tilt } = pendingRef.current;
-    pendingRef.current = { yaw: 0, tilt: 0 };
-    if (yaw || tilt) onUpdateRef.current(yaw, tilt);
+const zero=():NavigationInput=>({yaw:0,pitch:0,roll:0,right:0,down:0,forward:0});
+const motionCodes=['KeyW','KeyA','KeyS','KeyD','KeyQ','KeyE','KeyR','KeyF','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'];
+/** Two independent touch pointers and one motion loop. Never runs while idle. */
+export const VirtualJoystick:React.FC<Props>=props=>{
+  const callbacks=useRef(props);callbacks.current=props;
+  const keys=useRef(new Set<string>()),frame=useRef(0),smooth=useRef(zero());
+  const pads=useRef({move:{x:0,y:0},look:{x:0,y:0}}),lift=useRef(0);
+  const pointers=useRef(new Map<number,{kind:'move'|'look'|'lift';x:number;y:number}>());
+  const [knobs,setKnobs]=useState({move:{x:0,y:0},look:{x:0,y:0}});
+  const stop=()=>{keys.current.clear();pads.current={move:{x:0,y:0},look:{x:0,y:0}};lift.current=0;pointers.current.clear();smooth.current=zero();cancelAnimationFrame(frame.current);frame.current=0;setKnobs({move:{x:0,y:0},look:{x:0,y:0}});};
+  const start=()=>{
+    if(frame.current)return;
+    let last=performance.now();
+    const tick=(now:number)=>{
+      const dt=Math.min(.04,(now-last)/1000);last=now;
+      const k=keys.current,p=pads.current,axis=(a:string,b:string)=>(k.has(a)?1:0)-(k.has(b)?1:0);
+      const target:NavigationInput={right:axis('KeyD','KeyA')+p.move.x,down:axis('KeyF','KeyR')+lift.current,
+        forward:axis('KeyW','KeyS')-p.move.y,yaw:axis('ArrowRight','ArrowLeft')+p.look.x,
+        pitch:axis('ArrowDown','ArrowUp')+p.look.y,roll:axis('KeyE','KeyQ')};
+      const len=Math.hypot(target.right,target.down,target.forward);if(len>1){target.right/=len;target.down/=len;target.forward/=len;}
+      const result=zero();let active=false;
+      for(const name of Object.keys(target) as (keyof NavigationInput)[]){
+        const t=Math.max(-1,Math.min(1,target[name]));
+        let value=smooth.current[name]+(t-smooth.current[name])*(1-Math.exp(-dt/(t===0?.035:.055)));
+        if(Math.abs(value)<.003&&t===0)value=0;
+        smooth.current[name]=value;result[name]=value*dt;active ||= value!==0 || t!==0;
+      }
+      const boost=k.has('ShiftLeft')||k.has('ShiftRight')?3:1;
+      result.right*=boost;result.down*=boost;result.forward*=boost;
+      result.yaw*=55;result.pitch*=55;result.roll*=55;
+      if(active)callbacks.current.onInput(result);
+      frame.current=active?requestAnimationFrame(tick):0;
+    };
+    frame.current=requestAnimationFrame(tick);
   };
-  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (pointerRef.current !== null || e.button !== 0) return;
-    e.preventDefault();
-    e.stopPropagation();
-    pointerRef.current = e.pointerId;
-    e.currentTarget.setPointerCapture(e.pointerId);
-    startPosRef.current = lastPosRef.current = { x: e.clientX, y: e.clientY };
-    setActive(true);
+  useEffect(()=>{
+    const down=(e:KeyboardEvent)=>{
+      if(e.defaultPrevented||e.isComposing||e.altKey||e.ctrlKey||e.metaKey||document.querySelector('[aria-modal=true]')||
+        (e.target instanceof Element&&e.target.closest('input,textarea,select,[contenteditable=true],[data-panel-id]')))return;
+      if(motionCodes.includes(e.code)){e.preventDefault();keys.current.add(e.code);start();}
+      else if(e.code.startsWith('Shift'))keys.current.add(e.code);
+      else if(!e.repeat&&e.code==='Home'){e.preventDefault();stop();callbacks.current.onReset();}
+      else if(!e.repeat&&e.code==='KeyV'){e.preventDefault();stop();callbacks.current.onModeChange();}
+    };
+    const up=(e:KeyboardEvent)=>keys.current.delete(e.code);
+    const visibility=()=>{if(document.hidden)stop();};
+    const focus=(e:FocusEvent)=>{if(e.target instanceof Element&&e.target.closest('[data-panel-id],input,textarea,select,[aria-modal=true]'))stop();};
+    window.addEventListener('keydown',down);window.addEventListener('keyup',up);window.addEventListener('blur',stop);
+    document.addEventListener('visibilitychange',visibility);document.addEventListener('focusin',focus);window.addEventListener('navigation-stop',stop);
+    return()=>{stop();window.removeEventListener('keydown',down);window.removeEventListener('keyup',up);window.removeEventListener('blur',stop);document.removeEventListener('visibilitychange',visibility);document.removeEventListener('focusin',focus);window.removeEventListener('navigation-stop',stop);};
+  },[]);
+  useEffect(()=>{if(!props.enabled||!props.roaming)stop();},[props.enabled,props.roaming]);
+  const end=(e:React.PointerEvent)=>{
+    const p=pointers.current.get(e.pointerId);if(!p)return;pointers.current.delete(e.pointerId);
+    if(p.kind==='lift')lift.current=0;else {pads.current[p.kind]={x:0,y:0};setKnobs(v=>({...v,[p.kind]:{x:0,y:0}}));}
+    if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
   };
-  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (pointerRef.current !== e.pointerId) return;
-    pendingRef.current.yaw += (e.clientX - lastPosRef.current.x) * 0.5;
-    pendingRef.current.tilt += (e.clientY - lastPosRef.current.y) * 0.5;
-    lastPosRef.current = { x: e.clientX, y: e.clientY };
-    // High-rate mouse/touch input shares one camera update per display frame.
-    if (!frameRef.current) frameRef.current = requestAnimationFrame(() => {
-      flushMovement();
-      const x = lastPosRef.current.x - startPosRef.current.x;
-      const y = lastPosRef.current.y - startPosRef.current.y;
-      const scale = Math.min(1, 40 / (Math.hypot(x, y) || 1));
-      setKnobPos({ x: x * scale, y: y * scale });
-    });
-  };
-  const handlePointerEnd = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (pointerRef.current !== e.pointerId) return;
-    // Preserve the last delta, including a release between animation frames.
-    flushMovement();
-    pointerRef.current = null;
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
-    setActive(false);
-    setKnobPos({ x: 0, y: 0 });
-  };
+  const pad=(kind:'move'|'look')=><div className="camera-pad" role="group" aria-label={kind==='move'?'移动摇杆':'转向摇杆'}
+    onPointerDown={e=>{if(e.button!==0||[...pointers.current.values()].some(p=>p.kind===kind))return;e.preventDefault();const r=e.currentTarget.getBoundingClientRect();pointers.current.set(e.pointerId,{kind,x:r.left+r.width/2,y:r.top+r.height/2});e.currentTarget.setPointerCapture(e.pointerId);}}
+    onPointerMove={e=>{const p=pointers.current.get(e.pointerId);if(!p||p.kind!==kind)return;const dx=e.clientX-p.x,dy=e.clientY-p.y,len=Math.hypot(dx,dy),reach=26;
+      const raw=Math.min(1,len/reach),m=raw<.08?0:Math.pow((raw-.08)/.92,1.3);
+      pads.current[kind]={x:len?dx/len*m:0,y:len?dy/len*m:0};setKnobs(v=>({...v,[kind]:{x:len?dx/len*raw*reach:0,y:len?dy/len*raw*reach:0}}));start();}}
+    onPointerUp={end} onPointerCancel={end} onLostPointerCapture={end}>
+    <i style={{transform:`translate(calc(-50% + ${knobs[kind].x}px),calc(-50% + ${knobs[kind].y}px))`}}/>
+  </div>;
+  if(!props.enabled)return null;
+  return <div data-scene-ui className="camera-navigation" aria-label="视角导航">
+    {props.roaming && <div className="camera-float camera-left">
+      <div className="camera-actions camera-lift">{[-1,1].map(dir=><button key={dir} aria-label={dir<0?'向上移动':'向下移动'} title={dir<0?'升高 · R':'降低 · F'}
+        onPointerDown={e=>{if(e.button!==0||[...pointers.current.values()].some(p=>p.kind==='lift'))return;e.preventDefault();pointers.current.set(e.pointerId,{kind:'lift',x:0,y:0});e.currentTarget.setPointerCapture(e.pointerId);lift.current=dir;start();}}
+        onPointerUp={end} onPointerCancel={end} onLostPointerCapture={end}
+        onClick={e=>{if(e.detail===0)props.onInput({...zero(),down:dir*.2});}}><svg viewBox="0 0 24 24"><path d={dir<0?'M12 19V5m-6 6 6-6 6 6':'M12 5v14m-6-6 6 6 6-6'}/></svg></button>)}</div>
+      {pad('move')}<span className="camera-caption">移动 <kbd>WASD</kbd></span>
+    </div>}
+    <div className="camera-float camera-right">
+      <div className="camera-actions">
+        <button onClick={props.onModeChange} aria-label={props.roaming?'切换到环绕':'切换到漫游'} aria-pressed={props.roaming} title={`${props.roaming?'漫游：原地转向':'环绕：围绕目标'} · V`}><svg viewBox="0 0 24 24">{props.roaming?<><path d="m12 3 8 18-8-5-8 5 8-18Z"/><path d="M12 3v13"/></>:<><ellipse cx="12" cy="12" rx="10" ry="5" transform="rotate(-35 12 12)"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="7" r="1.5" fill="currentColor" stroke="none"/></>}</svg></button>
+        <button onClick={props.onReset} aria-label="视角归正" title="看向太阳，再次俯视 · Home"><svg viewBox="0 0 24 24"><path d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/><path d="M2.458 12C3.732 7.943 7.523 5 12 5s8.268 2.943 9.542 7C20.268 16.057 16.477 19 12 19S3.732 16.057 2.458 12Z"/></svg></button>
 
-  return (
-    <div 
-      className="fixed bottom-40 sm:bottom-32 right-6 sm:right-16 z-30 flex flex-col items-center gap-3 pointer-events-auto transition-opacity duration-300 ease-in-out"
-    >
-      
-      <div className="flex items-center gap-2">
-        
-        {/* Proximity Sim / Immersive Toggle */}
-        {show3DToggle && is3DEnabled && onToggleProximity && (
-           <button
-              onClick={onToggleProximity}
-              className={`p-2 rounded-full border backdrop-blur-md transition-all shadow-lg relative group ${isProximityEnabled ? 'bg-green-600/80 border-green-400 text-white' : 'bg-gray-800/60 border-white/20 text-white/70 hover:text-white hover:bg-green-600/60'}`}
-              title="近景透视：缩放时模拟相机靠近或远离"
-              aria-label="近景透视"
-              aria-pressed={isProximityEnabled}
-           >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 12h4m-2-2v4" /> {/* Plus sign eye roughly? Or just simple circle */}
-                 <circle cx="12" cy="12" r="9" strokeWidth="2" />
-              </svg>
-              {/* Tooltip */}
-              <div className="absolute bottom-full right-0 mb-2 w-32 p-2 bg-gray-900 text-[10px] text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none border border-gray-700">
-                  近景透视：缩放时模拟相机靠近或远离天体。
-              </div>
-           </button>
-        )}
 
-        {/* 3D Perspective Toggle */}
-        {show3DToggle && onToggle3D && (
-          <button 
-            onClick={onToggle3D}
-            className={`p-2 rounded-full border backdrop-blur-md transition-all shadow-lg ${is3DEnabled ? 'bg-blue-600/80 border-blue-400 text-white' : 'bg-gray-800/60 border-white/20 text-white/70 hover:text-white hover:bg-blue-600/60'}`}
-            title="Toggle 3D Perspective"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-            </svg>
-          </button>
-        )}
-
-        {/* Reset Button */}
-        <button 
-          onClick={onReset}
-          className="bg-gray-800/60 backdrop-blur-md p-2 rounded-full border border-white/20 text-white/70 hover:text-white hover:bg-blue-600/80 hover:border-white/50 transition-all shadow-lg"
-          title="Reset View (Top Down)"
-        >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-          </svg>
-        </button>
       </div>
-
-      {/* Joystick Base */}
-      <div 
-        ref={containerRef}
-        className={`w-24 h-24 rounded-full bg-gray-900/40 backdrop-blur-md border border-white/10 flex items-center justify-center shadow-2xl touch-none transition-colors ${active ? 'border-white/30' : ''}`}
-        aria-label="拖动旋转视角"
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerEnd}
-        onPointerCancel={handlePointerEnd}
-        onLostPointerCapture={handlePointerEnd}
-      >
-        {/* Stick/Knob */}
-        <div 
-          className={`w-10 h-10 rounded-full bg-white/80 shadow-inner shadow-gray-400 transition-transform duration-75 ease-out ${active ? 'bg-white' : 'bg-white/60'}`}
-          style={{ 
-            transform: `translate(${knobPos.x}px, ${knobPos.y}px)`,
-            pointerEvents: 'none' 
-          }}
-        >
-            {/* Decor */}
-            <div className="w-full h-full rounded-full bg-gradient-to-br from-transparent to-gray-300/50"></div>
-        </div>
-      </div>
-      
-      <div className="text-[10px] text-gray-500 font-mono uppercase tracking-wider select-none">Camera</div>
+      {pad('look')}<span className="camera-caption">{props.roaming?'漫游':'环绕'} <kbd>↑↓←→</kbd></span>
+      {props.roaming && <output className="camera-travel-rate">{props.travelLabel}</output>}
     </div>
-  );
+  </div>;
 };

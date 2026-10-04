@@ -31,6 +31,7 @@ interface TrueScaleSolarSystemProps {
   zoomTransform: any;
   dimensions: { w: number, h: number };
   centerOfRotation: Position;
+  cameraEye?: Position | null;
   planets: PlanetData[];
   dwarfs: PlanetData[];
   asteroidsComets: PlanetData[];
@@ -40,14 +41,14 @@ interface TrueScaleSolarSystemProps {
 const ORIGIN = { x: 0, y: 0, z: 0 };
 const TrueScaleSolarSystem: React.FC<TrueScaleSolarSystemProps> = ({
   currentDate, settings, onPlanetSelect, selectedPlanetId, cameraFocusId,
-  highlightedAlignment, pinnedPlanets, zoomTransform, dimensions, centerOfRotation,
+  highlightedAlignment, pinnedPlanets, zoomTransform, dimensions, centerOfRotation, cameraEye,
   planets, dwarfs, asteroidsComets, visibilityMap,
 }) => {
   const projectOrbit = useMemo(createOrbitProjector, []);
   const k = zoomTransform.k;
   const scene = useMemo(() => createSceneView({ scale: AU_SCALE_TRUE, settings,
-    zoom: zoomTransform, width: dimensions.w, height: dimensions.h, center: centerOfRotation }),
-  [settings, zoomTransform, dimensions, centerOfRotation]);
+    zoom: zoomTransform, width: dimensions.w, height: dimensions.h, center: centerOfRotation, observer: cameraEye }),
+  [settings, zoomTransform, dimensions, centerOfRotation, cameraEye]);
 
   const visibleBodies = useMemo(() => [
     ...planets,
@@ -166,7 +167,7 @@ const TrueScaleSolarSystem: React.FC<TrueScaleSolarSystemProps> = ({
             const rings = item.data.satellites?.filter(ring => ring.isRing && visibilityMap[ring.id] !== false) ?? [];
             const ringLayer = (side: 'front' | 'back') => rings.map(ring =>
               <PlanetRing key={ring.id} ring={ring} radiusScale={AU_SCALE_TRUE * item.pos.scaleFactor}
-                viewTilt={settings.viewTilt} viewYaw={settings.viewYaw} side={side} />);
+                viewTilt={settings.viewTilt} viewYaw={settings.viewYaw} viewRoll={settings.viewRoll} side={side} />);
             return <g key={item.id} data-body={item.id}
               transform={`translate(${item.pos.x}, ${item.pos.y})`}
               onClick={e => { e.stopPropagation(); onPlanetSelect(item.data); }}

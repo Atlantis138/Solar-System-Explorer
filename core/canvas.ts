@@ -8,7 +8,7 @@ export function prepareCanvas(canvas: HTMLCanvasElement, dpr = window.devicePixe
   if (canvas.width !== pixelWidth) canvas.width = pixelWidth;
   if (canvas.height !== pixelHeight) canvas.height = pixelHeight;
   const ctx = canvas.getContext('2d');
-  if (!ctx) return null;
+  if (!ctx || ctx.isContextLost?.()) return null;
   ctx.setTransform(pixelWidth / width, 0, 0, pixelHeight / height, 0, 0);
   ctx.globalAlpha = 1;
   ctx.clearRect(0, 0, width, height);

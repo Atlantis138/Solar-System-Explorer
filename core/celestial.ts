@@ -1,4 +1,4 @@
-import { cameraFocalPixels } from './cameraOptics';
+import { cameraFocalPixels, cameraBasis } from './cameraOptics';
 /** Directional, infinite-distance celestial geometry. Angles are J2000 degrees. */
 export interface SkyPoint { x: number; y: number; z: number }
 export interface ProjectedSkyPoint { x: number; y: number; depth: number }
@@ -16,14 +16,14 @@ export function equatorialToEcliptic(ra: number, dec: number): SkyPoint {
 /** Fixed 72° field of view on the shorter axis. Camera translation and dolly do
  * not belong here: stars represent directions at effectively infinite distance.
  * The orientation uses exactly the same basis as the foreground projection. */
-export function createSkyProjection(width: number, height: number, tilt: number, yaw: number, focalOverride?: number) {
-  const sinT = Math.sin(tilt * RAD), cosT = Math.cos(tilt * RAD);
-  const sinY = Math.sin(yaw * RAD), cosY = Math.cos(yaw * RAD);
+export function createSkyProjection(width: number, height: number, tilt: number, yaw: number, focalOverride?: number, roll=0) {
+  const basis=cameraBasis(tilt,yaw,roll);
   const focal = focalOverride ?? cameraFocalPixels(width, height);
-  const camera = ({ x, y, z }: SkyPoint): SkyPoint => {
-    const xx = x * cosY - y * sinY, yy = x * sinY + y * cosY;
-    return { x: xx, y: yy * sinT + z * cosT, z: yy * cosT - z * sinT };
-  };
+  const camera = (p:SkyPoint):SkyPoint => ({
+    x:p.x*basis.right.x+p.y*basis.right.y+p.z*basis.right.z,
+    y:-(p.x*basis.down.x+p.y*basis.down.y+p.z*basis.down.z),
+    z:-(p.x*basis.back.x+p.y*basis.back.y+p.z*basis.back.z),
+  });
   const screen = (p: SkyPoint): ProjectedSkyPoint => ({
     x: width / 2 + focal * p.x / p.z,
     y: height / 2 - focal * p.y / p.z,

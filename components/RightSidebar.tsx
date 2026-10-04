@@ -1,3 +1,4 @@
+import FloatingPanel from './FloatingPanel';
 
 import React, { useState, useMemo } from 'react';
 import { FoundEvent, SortOption } from '../types';
@@ -80,27 +81,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
   };
 
   return (
-    <div className="fixed top-4 right-8 z-40 flex flex-col shadow-2xl pointer-events-auto transition-all duration-300" style={style}>
-      <div className="bg-gray-900/95 border border-gray-700 rounded-xl p-4 w-80 shadow-2xl backdrop-blur-md flex flex-col h-full overflow-hidden">
-        <div className="flex justify-between items-center mb-3 shrink-0">
-           <h2 className="text-lg font-bold text-white flex items-center gap-2">
-             <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
-             历史结果 (History)
-           </h2>
-           <div className="flex items-center gap-2">
-               <span className="text-xs bg-gray-800 px-2 py-1 rounded text-blue-300 font-mono">{events.length}</span>
-               <button 
-                  onClick={onClose}
-                  className="text-gray-400 hover:text-white transition-colors"
-                  title="Close Sidebar"
-               >
-                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                   </svg>
-               </button>
-           </div>
-        </div>
-
+    <FloatingPanel id="history" title="搜索结果" subtitle={`${events.length} 项天象`} side="right" top={64} onClose={onClose}>
         {/* Sort Controls */}
         <div className="flex gap-1 mb-3 bg-gray-800 p-1 rounded-lg shrink-0">
             <button onClick={() => setSortOption('time')} className={`flex-1 text-[10px] py-1 rounded ${sortOption === 'time' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-200'}`}>时间 (Time)</button>
@@ -157,7 +138,6 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
            </div>
         )}
 
-      </div>
-    </div>
+    </FloatingPanel>
   );
 };

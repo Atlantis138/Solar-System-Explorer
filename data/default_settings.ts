@@ -6,6 +6,19 @@ import { SKY_DEFAULTS } from '../core/skySettings';
 import { DEFAULT_SUN_ANGULAR_RADIUS_DEG } from '../utils/astronomy';
 
 export const SYSTEM_DEFAULTS: AppSettings = {
+  showNearbyStars: true,
+  nearbyStarRadiusLy: 50,
+  showNearbyStarLabels: true,
+  nearbyStarContrast: 1,
+  nearbyStarLabelDensity: 1,
+  skyStarLabelDensity: 1,
+  viewRoll: 0,
+  nearbyStarDensity: 'balanced',
+  nearbyMagnitudeLimit: 16,
+  nearbyShowGuides: true,
+  cameraFov: 72,
+  cameraPerspective: 1,
+  cameraTravelSpeed: 1,
   orbitOpacity: 1.0,
   orbitCategoryOpacity: {...DEFAULT_ORBIT_CATEGORY_OPACITY},
   orbitPerspectiveIntensity: 1.0,
@@ -33,14 +46,14 @@ export const SYSTEM_DEFAULTS: AppSettings = {
   starDensity: 1500, 
   
   ...SKY_DEFAULTS,
-  renderSettings: { sceneQuality: 'standard', innerQuality: 'eco', outerQuality: 'eco', cometQuality: 'performance' },
+  renderSettings: { sceneQuality: 'standard', innerQuality: 'standard', outerQuality: 'standard', cometQuality: 'standard' },
   transitTolerance: 1.0,
   alignmentTolerance: 10.0,
   strictSolarRadius: DEFAULT_SUN_ANGULAR_RADIUS_DEG,
   viewTilt: 90, 
   viewYaw: 0, 
   showCameraControl: false,
-  cameraSettingsVersion: 2,
+  cameraSettingsVersion: 3,
   enableSpaceView: false, 
   enablePerspective: false,
   enableProximitySim: true

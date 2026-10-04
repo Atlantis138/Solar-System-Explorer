@@ -1,3 +1,4 @@
+import FloatingPanel from './FloatingPanel';
 import React, { useState } from 'react';
 import { EventType, SearchSpeed, SearchState, AppSettings, PlanetData } from '../types';
 
@@ -96,16 +97,8 @@ const EventsPanel: React.FC<EventsPanelProps> = ({
   };
 
   return (
-    <div className="fixed top-24 left-8 z-40 flex flex-col shadow-2xl" style={{ maxHeight: 'calc(100vh - 150px)' }}>
-      <div className="bg-gray-900/95 border border-gray-700 rounded-xl p-5 w-80 shadow-2xl backdrop-blur-md overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-bold text-white flex items-center gap-2"><svg className="w-5 h-5 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>天象搜寻 (Events)</h2>
-          <div className="flex items-center gap-1">
-            <button onClick={onTogglePin} className={`p-1.5 rounded-full transition-colors ${isPinned ? 'text-blue-400 bg-blue-900/30' : 'text-gray-500 hover:text-gray-300'}`}>{isPinned ? <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M16 12V4H17V2H7V4H8V12L6 14V16H11.2V22H12.8V16H18V14L16 12Z" /></svg> : <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M16 12V4H17V2H7V4H8V12L6 14V16H11.2V22H12.8V16H18V14L16 12M8.8 14L10 12.8V4H14V12.8L15.2 14H8.8Z" /></svg>}</button>
-            <button onClick={onClose} className="p-1 text-gray-400 hover:text-white transition-colors"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
-          </div>
-        </div>
-        
+    <FloatingPanel id="events" title="天象搜寻" top={80} onClose={onClose}>
+        <label className="flex gap-2 items-center text-xs text-gray-400 mb-4"><input type="checkbox" checked={isPinned} onChange={onTogglePin} />搜索完成后保留面板</label>
         {searchState.active ? (
           <div className="text-center py-4">
              {continuousIteration ? (
@@ -243,8 +236,7 @@ const EventsPanel: React.FC<EventsPanelProps> = ({
             </div>
           </div>
         )}
-      </div>
-    </div>
+    </FloatingPanel>
   );
 };
 

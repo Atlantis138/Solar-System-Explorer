@@ -1,0 +1,35 @@
+{
+  "source": "HYG v4.1, David Nash / Astronexus",
+  "repository": "https://github.com/astronexus/HYG-Database",
+  "revision": "3bf37f4b2d5460e1278286320d1d62fab9b493c1",
+  "sourceFile": "hyg/CURRENT/hygdata_v41.csv",
+  "epoch": "J2000.0",
+  "equinox": "J2000",
+  "frame": "heliocentric-ecliptic-J2000",
+  "positionUnit": "ly",
+  "license": "CC BY-SA 4.0",
+  "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+  "derivativeLicense": "CC BY-SA 4.0",
+  "counts": {
+    "25": 166,
+    "50": 981,
+    "100": 4059
+  },
+  "inputs": {
+    "hygdata_v41.csv": "d9f69fd86bbf90a4e4d52b4c5c53eacfa6dfc0bfdef85bfd94f095e0bebe4ebd",
+    "LICENSE": "f404190403d31e0ce7223f4cb7af954485ad88077358330754dc5c892a856627"
+  },
+  "skyNamesSha256": "151ec1db35ab5821a6facf79ff6ad0381a7463cf2589bee7d319ab250bc60a2b",
+  "changes": [
+    "Selected known positive distances within 100 light-years; excluded Sun.",
+    "Converted J2000 equatorial directions and catalog distances to J2000 ecliptic light-years.",
+    "Added Chinese display names from the existing XHIP/d3-celestial sky and common labels in the builder.",
+    "Converted B-V to approximate display colors; rounded spatial coordinates to 8 decimal places."
+  ],
+  "limitations": [
+    "Not a volume-complete census; faint stars and brown dwarfs are incompletely represented.",
+    "Fixed J2000 positions and catalog distances, independent of simulation date; no space-motion propagation.",
+    "Multiple-star components are retained as separate source records, not inferred barycenters.",
+    "Magnitudes are catalog V-band values as seen from the Solar System, not from the movable camera."
+  ]
+}

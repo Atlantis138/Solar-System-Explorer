@@ -73,6 +73,30 @@ export interface RealStar {
   color: string;
 }
 
+/** Fixed-epoch neighbours. Positions are heliocentric J2000 ecliptic light-years. */
+export interface NearbyStar {
+  id: string;
+  name: string;
+  englishName: string;
+  designation: string;
+  hipId?: string;
+  position: Position;
+  distanceLy: number;
+  magnitude: number;
+  absoluteMagnitude: number;
+  spectralType: string;
+  color: string;
+}
+
+export interface NearbyStarCatalog {
+  version: 1;
+  epoch: 'J2000.0';
+  frame: 'heliocentric-ecliptic-J2000';
+  positionUnit: 'ly';
+  radiusLy: 100;
+  stars: NearbyStar[];
+}
+
 export interface Constellation {
   id?: string;
   name: string;
@@ -117,6 +141,16 @@ export interface RenderSettings {
 export type OrbitCategory = 'planet' | 'satellite' | 'dwarf' | 'comet' | 'asteroid';
 
 export interface AppSettings {
+  showNearbyStars?: boolean;
+  nearbyStarRadiusLy?: 25 | 50 | 100;
+  showNearbyStarLabels?: boolean;
+  nearbyStarDensity?: 'sparse' | 'balanced' | 'all';
+  nearbySpectralTypes?: string[];
+  nearbyMagnitudeLimit?: number;
+  nearbyShowGuides?: boolean;
+  cameraFov?: number;
+  cameraPerspective?: number; // 0 is orthographic, 1 is full perspective
+  cameraTravelSpeed?: number;
   orbitOpacity: number; // 0.0 to 1.0
   orbitCategoryOpacity?: Partial<Record<OrbitCategory,number>>;
   orbitPerspectiveIntensity: number; // 0 to 2, depth contrast; 1 = default
@@ -175,12 +209,16 @@ export interface AppSettings {
   alignmentTolerance: number;
   strictSolarRadius: number; // For strict transit mode
 
+  viewRoll?: number; // Camera bank angle in degrees
+  nearbyStarLabelDensity?: number;
+  skyStarLabelDensity?: number;
+  nearbyStarContrast?: number; // 0 = reveal faint stars, 1 = natural contrast
   viewTilt: number; 
   viewYaw: number; // Rotation 0-360
   showCameraControl: boolean; 
   enableSpaceView: boolean; // Master switch for 3D Space Simulation
   enablePerspective: boolean; // Active 3D Perspective projection
-  enableProximitySim: boolean; // Active Proximity/Immersive Camera Mode
+  enableProximitySim: boolean; // Legacy preference; perspective always uses camera travel
 }
 
 export type EventType = 'TRANSIT' | 'PLANETARY_ALIGNMENT';

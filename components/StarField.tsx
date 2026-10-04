@@ -1,3 +1,5 @@
+import { drawStar } from '../core/starSprites';
+import { starLabelBudget, labelPriority, skyStarName, StableStarLabels, StarLabel } from '../core/starLabels';
 
 
 import React, { useEffect, useRef, useState, useMemo } from 'react';
@@ -27,6 +29,7 @@ interface Star {
 
 const StarField: React.FC<StarFieldProps> = ({ settings, realStars, constellations, focalPixels }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const labelLayout=useRef(new StableStarLabels());
   const [proceduralStars, setProceduralStars] = useState<Star[]>([]);
 
   // --- Procedural Star Generation ---
@@ -148,7 +151,7 @@ const StarField: React.FC<StarFieldProps> = ({ settings, realStars, constellatio
 
   // Same pre-paint phase as the foreground: no trailing background frame.
   useCanvasDraw(canvasRef, (ctx, w, h) => {
-    const projection = createSkyProjection(w, h, settings.viewTilt, settings.viewYaw, focalPixels);
+    const projection = createSkyProjection(w, h, settings.viewTilt, settings.viewYaw, focalPixels, settings.viewRoll ?? 0);
     const inViewport = (p: { x: number; y: number }, margin = 8) =>
       p.x >= -margin && p.x <= w + margin && p.y >= -margin && p.y <= h + margin;
     const drawPaths = (paths: SkyPoint[][]) => {
@@ -162,7 +165,7 @@ const StarField: React.FC<StarFieldProps> = ({ settings, realStars, constellatio
       }
       ctx.stroke();
     };
-    const labels: { x: number; y: number; radius: number; text: string }[] = [];
+    const labels:StarLabel[]=[];
     if (!settings.useRealStars) for (const star of proceduralStars) {
       const p = projection(star);
       if (p.depth >= 0 || !inViewport(p)) continue;
@@ -220,15 +223,10 @@ const StarField: React.FC<StarFieldProps> = ({ settings, realStars, constellatio
         if (p.depth >= 0 || !inViewport(p)) continue;
         // Keep small stars sharp at every brightness; dim their light, not their radius.
         const radius = star.size * 0.85;
-        ctx.globalAlpha = Math.min(1, star.opacity * multiplier * 0.8);
-        ctx.fillStyle = star.color;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
-        ctx.fill();
-        if (settings.realStarLabels !== 'none' && star.mag <= Math.min(2.5, limit)) {
-          const text = settings.realStarLabels === 'cn' ? star.name
-            : [star.name, star.englishName].filter(Boolean).join(' ');
-          if (text) labels.push({ ...p, radius, text });
+        drawStar(ctx,p.x,p.y,radius,star.color,Math.min(1,star.opacity*multiplier*.8));
+        if (settings.realStarLabels !== 'none' && star.mag <= limit) {
+          const text=skyStarName(star,settings.realStarLabels==='bilingual');
+          if (text) labels.push({ ...p, id:star.id, radius, text, priority:labelPriority(p.x,p.y,w,h,star.mag) });
         }
       }
     }
@@ -253,32 +251,20 @@ const StarField: React.FC<StarFieldProps> = ({ settings, realStars, constellatio
     ctx.lineWidth = 2;
     ctx.strokeStyle = '#020306';
     ctx.fillStyle = '#b8c4d6';
-    const occupied: { x: number; y: number; w: number; h: number }[] = [];
-    let starLabelCount = 0;
-    for (const label of labels) {
-      if (starLabelCount >= 14) break;
-      let width = textWidths.current.get(label.text);
-      if (width === undefined) {
-        width = ctx.measureText(label.text).width;
-        textWidths.current.set(label.text, width);
-      }
-      // A stable offset avoids labels jumping sides during a rotation. Keep
-      // fractional positions: the DPR backing store supplies the sharpness.
-      const x = label.x + label.radius + 6, y = label.y;
-      const box = { x: x - 3, y: y - 10, w: width + 6, h: 20 };
-      const edge = Math.min(box.x, box.y, w - box.x - box.w, h - box.y - box.h);
-      if (edge <= 0 || occupied.some(other => box.x < other.x + other.w && box.x + box.w > other.x &&
-          box.y < other.y + other.h && box.y + box.h > other.y)) continue;
-      ctx.globalAlpha = Math.min(1, settings.starLabelBrightness * SKY_BRIGHTNESS_BASE.starLabelBrightness) * Math.min(1, edge / 24);
-      ctx.strokeText(label.text, x, y);
-      ctx.fillText(label.text, x, y);
-      occupied.push(box);
-      starLabelCount++;
+    const measure=(text:string)=>{let width=textWidths.current.get(text);if(width===undefined){width=ctx.measureText(text).width;textWidths.current.set(text,width);}return width;};
+    const layout=labelLayout.current.layout(labels,w,h,starLabelBudget(w,h,settings.renderSettings.sceneQuality??'standard',settings.skyStarLabelDensity??1),measure);
+    ctx.textBaseline='middle';
+    for(const label of layout.labels){
+      ctx.globalAlpha=Math.min(1,settings.starLabelBrightness*SKY_BRIGHTNESS_BASE.starLabelBrightness)*label.alpha;
+      ctx.strokeText(label.text,label.box.x+3,label.box.y+label.box.h/2,label.box.w-6);
+      ctx.fillText(label.text,label.box.x+3,label.box.y+label.box.h/2,label.box.w-6);
     }
+    return layout.animating;
+
   }, [focalPixels, proceduralStars, processedRealStars, constellationGeometry, regionGeometry, grids,
-    settings.viewTilt, settings.viewYaw, settings.useRealStars, settings.starBrightness,
+    settings.viewTilt, settings.viewYaw, settings.viewRoll, settings.useRealStars, settings.starBrightness,
     settings.realStarMagnitudeLimit, settings.realStarBrightnessMultiplier, settings.realStarLabels,
-    settings.starLabelBrightness, settings.showConstellations, settings.constellationBrightnessMultiplier,
+    settings.starLabelBrightness, settings.skyStarLabelDensity, settings.renderSettings.sceneQuality, settings.showConstellations, settings.constellationBrightnessMultiplier,
     settings.showEclipticGrid, settings.showEquatorialGrid, settings.gridOpacity,
     settings.showConstellationNames, settings.showConstellationBoundaries], renderBudget(settings.renderSettings).maxDpr);
 

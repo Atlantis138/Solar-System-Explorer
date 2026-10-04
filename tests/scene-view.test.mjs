@@ -55,12 +55,12 @@ test('local orbital guides remain readable while distant planetary tracks fade w
   assert.ok(local.width<3);
 });
 
-test('orthographic and lens-only views retain local guides at close magnification', () => {
+test('orthographic and perspective retain local guides and always dolly at close magnification', () => {
   for (const perspective of [false,true]) {
     const scene=createSceneView({...options,settings:{...options.settings,enablePerspective:perspective,enableProximitySim:false},zoom:{...options.zoom,k:8.7},center:{x:1,y:0,z:0}});
     const p=scene.project({x:1.001,y:0,z:0});
-    assert.ok(p.distanceAU>59);
-    assert.ok(p.contextDistanceAU<.002);
+    assert.ok(p.distanceAU>0 && p.distanceAU<.01);
+    assert.ok(p.contextDistanceAU<.01);
     const style=orbitSegmentStyle(0,{zoom:8.7,perspective,tilt:7,intensity:1,trueScale:true,scale:23500,scene},false,p.distanceAU,true,p.contextDistanceAU);
     assert.ok(style.alpha>.1);
   }

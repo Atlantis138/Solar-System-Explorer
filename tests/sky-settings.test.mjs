@@ -55,7 +55,7 @@ test('movement enables real perspective immediately, and old contrast units migr
   assert.equal(migrated.orbitPerspectiveIntensity, 1);
   assert.ok(migrated.enablePerspective && migrated.enableProximitySim);
   assert.equal(migrateCameraSettings({ cameraSettingsVersion: 1, orbitPerspectiveIntensity: 1 }).orbitPerspectiveIntensity, 1);
-  assert.equal(migrateCameraSettings({ cameraSettingsVersion: 2, enableProximitySim: false }).enableProximitySim, false);
+  assert.equal(migrateCameraSettings({ cameraSettingsVersion: 2, enableProximitySim: false }).enableProximitySim, true);
   assert.deepEqual(migrateCameraSettings(migrated), migrated);
 });
 

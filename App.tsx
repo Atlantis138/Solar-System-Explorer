@@ -1,13 +1,15 @@
+import NavigationHelp from './components/NavigationHelp';
+import { setCameraMovement } from './core/cameraSettings';
+import { PanelWorkspace } from './components/FloatingPanel';
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import SolarSystem from './components/SolarSystem';
+import SolarSystem, { SolarSystemHandle } from './components/SolarSystem';
 import Controls from './components/Controls';
-import PlanetInfoPanel from './components/PlanetInfoPanel';
+import PlanetInformation from './components/PlanetInformation';
 import SettingsPanel from './components/SettingsPanel';
 import EventsPanel from './components/EventsPanel';
 import { RightSidebar } from './components/RightSidebar';
-import { VirtualJoystick } from './components/VirtualJoystick';
-import PinnedPlanetsSidebar from './components/PinnedPlanetsSidebar';
+
 import { PlanetData, AppSettings, PinnedPlanet, RealStar, Constellation } from './types';
 import { MILLISECONDS_PER_DAY } from './data/constants';
 import { DEFAULT_SUN_ANGULAR_RADIUS_DEG, calculateWorldPosition } from './utils/astronomy';
@@ -93,8 +95,14 @@ const App: React.FC = () => {
       return (targetYaw + 360) % 360;
   }, []);
 
+  const solarRef = useRef<SolarSystemHandle>(null);
+  const [nearbyActive,setNearbyActive] = useState(false);
   // --- UI State ---
+  const [showHelp,setShowHelp]=useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [focusCameraSettings,setFocusCameraSettings] = useState(false);
+  const [settingsRevealToken,setSettingsRevealToken] = useState(0);
+  const openSettings = (camera = false) => {window.dispatchEvent(new Event('navigation-stop'));setFocusCameraSettings(camera);setShowSettings(true);setSettingsRevealToken(v=>v+1);};
   const [showEvents, setShowEvents] = useState(false);
   const [isEventsPanelPinned, setIsEventsPanelPinned] = useState(false);
   const [showHistorySidebar, setShowHistorySidebar] = useState(false);
@@ -267,78 +275,13 @@ const App: React.FC = () => {
       );
   };
 
-  const handleCameraUpdate = useCallback((dYaw: number, dTilt: number) => {
-    setSettings(prev => {
-       let newYaw = (prev.viewYaw + dYaw) % 360;
-       if (newYaw < 0) newYaw += 360;
-       let newTilt = Math.max(-90, Math.min(90, prev.viewTilt - dTilt));
-       return { ...prev, viewYaw: newYaw, viewTilt: newTilt };
-    });
-  }, []);
-
-  // --- Smooth Camera Reset Animation ---
-  const animateCameraToStandard = useCallback(() => {
-      if (!celestialData) return;
-
-      // 1. Stop following any planet (this snaps pivot to Sun, which is what we want for standard view)
-      setCameraFocusId(null);
-
-      // 2. Calculate Target Yaw (Earth at Bottom)
-      const earth = celestialData.planets.find(p => p.id === 'earth');
-      const targetYaw = calculateSmartYaw(sim.currentDate, earth);
-
-      // 3. Animation Setup
-      const startYaw = settings.viewYaw;
-      const startTilt = settings.viewTilt;
-      const targetTilt = 90;
-      const duration = 1000; // ms
-      const startTime = performance.now();
-
-      // Calculate shortest path for Yaw rotation
-      let diffYaw = targetYaw - startYaw;
-      while (diffYaw > 180) diffYaw -= 360;
-      while (diffYaw < -180) diffYaw += 360;
-
-      const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
-
-      const step = (now: number) => {
-          const elapsed = now - startTime;
-          const progress = Math.min(elapsed / duration, 1);
-          const ease = easeOutCubic(progress);
-
-          const currentYaw = startYaw + diffYaw * ease;
-          const currentTilt = startTilt + (targetTilt - startTilt) * ease;
-
-          setSettings(prev => ({
-             ...prev,
-             viewYaw: (currentYaw + 360) % 360,
-             viewTilt: currentTilt
-          }));
-
-          if (progress < 1) {
-              requestAnimationFrame(step);
-          } else {
-              // Ensure final exact values
-              setSettings(prev => ({
-                 ...prev,
-                 viewYaw: (targetYaw + 360) % 360,
-                 viewTilt: targetTilt
-              }));
-          }
-      };
-
-      requestAnimationFrame(step);
-
-      // 4. Trigger Zoom Reset (handled by SolarSystem via D3 transition)
-      setResetCameraFlag(prev => prev + 1);
-
-  }, [celestialData, sim.currentDate, calculateSmartYaw, settings.viewYaw, settings.viewTilt]);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      if (e.code === 'Space') {
-        e.preventDefault();
+  const shortcutRef=useRef<(e:KeyboardEvent)=>void>(()=>{});
+  shortcutRef.current=(e:KeyboardEvent)=>{
+    if(e.defaultPrevented||e.repeat||e.isComposing||e.ctrlKey||e.metaKey||e.altKey||document.querySelector('[aria-modal=true]'))return;
+    if(e.target instanceof Element&&e.target.closest('input,textarea,select,[contenteditable=true]'))return;
+    if(e.code==='Space'){
+      if(e.target instanceof Element&&e.target.closest('button,a,summary'))return;
+      e.preventDefault();
         if (settings.continuousIteration && (sim.searchState.active || sim.searchState.isCalculating)) {
             if (sim.searchState.continuousPaused) {
                 sim.setSearchState(s => ({...s, continuousPaused: false}));
@@ -352,11 +295,30 @@ const App: React.FC = () => {
         if (sim.searchState.active) { sim.setSearchState(s => ({ ...s, active: false, status: 'Cancelled' })); return; } 
         if (sim.searchState.isCalculating) { sim.stopCalculation(); return; }
         sim.setIsPlaying(p => !p);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [sim.searchState, settings.continuousIteration]);
+      return;
+    }
+    const stop=()=>window.dispatchEvent(new Event('navigation-stop'));
+    const busy=sim.searchState.active||sim.searchState.isCalculating;
+    switch(e.code){
+      case 'KeyM':stop();if(showSettings)setShowSettings(false);else openSettings();break;
+      case 'KeyH':stop();setShowHelp(v=>!v);break;
+      case 'Slash':if(e.key!=='?')return;stop();setShowHelp(v=>!v);break;
+      case 'KeyN':stop();solarRef.current?.toggleNearby();break;
+      case 'KeyC':stop();setSettings(s=>setCameraMovement(s,!s.showCameraControl));break;
+      case 'KeyJ':if(!settings.useHighPrecision)return;stop();setShowEvents(v=>!v);break;
+      case 'KeyX':stop();setSettings(s=>({...s,trueScale:!s.trueScale}));break;
+      case 'KeyL':setSettings(s=>nearbyActive?{...s,showNearbyStarLabels:s.showNearbyStarLabels===false}:{...s,realStarLabels:s.realStarLabels==='none'?'cn':'none'});break;
+      case 'KeyO':setSettings(s=>({...s,orbitOpacity:s.orbitOpacity>0?0:1}));break;
+      case 'KeyB':if(busy)return;sim.setTimeDirection(d=>d===1?-1:1);break;
+      case 'Equal':case 'NumpadAdd':if(busy)return;sim.setSpeedMultiplier(v=>Math.min(64,v*2));break;
+      case 'Minus':case 'NumpadSubtract':if(busy)return;sim.setSpeedMultiplier(v=>Math.max(.125,v*.5));break;
+      case 'Digit0':case 'Numpad0':if(busy)return;sim.setCurrentDate(new Date());sim.setSpeedMultiplier(1);sim.setTimeDirection(1);sim.setIsPlaying(false);sim.resetSearchForm();break;
+      default:return;
+    }
+    e.preventDefault();
+  };
+  useEffect(()=>{const key=(e:KeyboardEvent)=>shortcutRef.current(e);window.addEventListener('keydown',key);return()=>window.removeEventListener('keydown',key);},[]);
+  useEffect(()=>{if(showHelp||showSettings||showEvents)window.dispatchEvent(new Event('navigation-stop'));},[showHelp,showSettings,showEvents]);
 
   const renderPlanets = useMemo(() => celestialData?.planets ?? [], [celestialData]);
 
@@ -374,7 +336,7 @@ const App: React.FC = () => {
   const isSplitView = isHistorySidebarVisible && isPinnedSidebarVisible;
 
   return (
-    <div className="w-screen h-screen bg-black text-white overflow-hidden flex relative select-none">
+    <PanelWorkspace><div className="simulator-root bg-black text-white overflow-hidden flex select-none">
       
       {/* Error Banner */}
       {parseErrors.length > 0 && (
@@ -384,9 +346,11 @@ const App: React.FC = () => {
           </div>
       )}
 
-      <SolarSystem 
+      <SolarSystem ref={solarRef} onNearbyActiveChange={setNearbyActive} onOpenCameraSettings={() => openSettings(true)}
         currentDate={sim.currentDate} 
         onPlanetSelect={setSelectedPlanet}
+        onSettingsChange={setSettings}
+        onCameraFocusChange={setCameraFocusId}
         selectedPlanetId={selectedPlanet?.id || null}
         settings={settings}
         highlightedAlignment={sim.highlightedAlignment}
@@ -401,18 +365,6 @@ const App: React.FC = () => {
         constellations={constellations}
       />
 
-      {settings.showCameraControl && (
-          <VirtualJoystick 
-            onUpdate={handleCameraUpdate} 
-            onReset={animateCameraToStandard}
-            show3DToggle={settings.enableSpaceView}
-            is3DEnabled={settings.enablePerspective}
-            onToggle3D={() => setSettings(prev => ({ ...prev, enablePerspective: !prev.enablePerspective }))}
-            isProximityEnabled={settings.enableProximitySim}
-            onToggleProximity={() => setSettings(prev => ({ ...prev, enableProximitySim: !prev.enableProximitySim }))}
-          />
-      )}
-
       {sim.notification.visible && (
         <div className="absolute top-32 right-8 max-w-xs z-50 animate-fade-in-out">
           <div className="bg-yellow-600/90 backdrop-blur px-4 py-3 rounded-lg shadow-lg border border-yellow-500">
@@ -421,7 +373,8 @@ const App: React.FC = () => {
         </div>
       )}
       
-      <Controls 
+      <Controls onOpenHelp={()=>{window.dispatchEvent(new Event('navigation-stop'));setShowHelp(true);}} onOpenNearby={() => solarRef.current?.toggleNearby()} nearbyActive={nearbyActive}
+        nearbyEnabled={!settings.trueScale && settings.showNearbyStars !== false}
         isPlaying={sim.isPlaying}
         onTogglePlay={() => sim.setIsPlaying(!sim.isPlaying)}
         onPause={() => sim.setIsPlaying(false)}
@@ -441,7 +394,7 @@ const App: React.FC = () => {
           sim.setIsPlaying(false); 
           sim.resetSearchForm();
         }}
-        onOpenSettings={() => setShowSettings(true)}
+        onOpenSettings={() => openSettings()}
         searchEnabled={settings.useHighPrecision}
         onOpenEvents={() => {
           setShowEvents(true);
@@ -450,8 +403,10 @@ const App: React.FC = () => {
         searchActive={sim.searchState.active || sim.searchState.isCalculating}
       />
 
+      {showHelp && <NavigationHelp onClose={()=>setShowHelp(false)} />}
+
       {showSettings && (
-        <SettingsPanel 
+        <SettingsPanel focusCamera={focusCameraSettings} revealKey={settingsRevealToken}
           settings={settings} 
           onSettingsChange={setSettings} 
           onClose={() => setShowSettings(false)} 
@@ -524,33 +479,14 @@ const App: React.FC = () => {
             />
       )}
 
-      <PinnedPlanetsSidebar
-        pinnedPlanets={pinnedPlanets}
-        onTogglePin={handleTogglePin}
-        onColorChange={handlePinColorChange}
-        onCameraFocus={(id) => setCameraFocusId(prev => prev === id ? null : id)}
-        cameraFocusId={cameraFocusId}
-        settings={settings}
-        allBodies={allBodies}
-        isSplitView={isSplitView}
-      />
+      <PlanetInformation details={{selectedPlanet,onClose:handleCloseInfoPanel,onTogglePin:handleTogglePin,
+        isPinned:pinnedPlanets.some(p=>p.id===selectedPlanet?.id),onToggleFollow:handleToggleFollow,
+        isFollowing:cameraFocusId===selectedPlanet?.id,isFollowingSystem:cameraFocusId===`barycenter:${selectedPlanet?.id}`,
+        currentDate:sim.currentDate,useHighPrecision:settings.useHighPrecision,trueScale:settings.trueScale,allBodies}}
+        pins={{pinnedPlanets,onTogglePin:handleTogglePin,onColorChange:handlePinColorChange,
+          onCameraFocus:handleToggleFollow,cameraFocusId,settings,allBodies,onSelect:setSelectedPlanet}}/>
 
-      {selectedPlanet && (
-        <PlanetInfoPanel 
-          selectedPlanet={selectedPlanet} 
-          onClose={handleCloseInfoPanel}
-          onTogglePin={handleTogglePin}
-          isPinned={pinnedPlanets.some(p => p.id === selectedPlanet.id)}
-          onToggleFollow={handleToggleFollow}
-          isFollowing={cameraFocusId === selectedPlanet.id}
-          currentDate={sim.currentDate}
-          useHighPrecision={settings.useHighPrecision}
-          trueScale={settings.trueScale}
-          isFollowingSystem={cameraFocusId === `barycenter:${selectedPlanet.id}`}
-          allBodies={allBodies}
-        />
-      )}
-    </div>
+    </div></PanelWorkspace>
   );
 };
 

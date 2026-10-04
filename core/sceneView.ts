@@ -1,7 +1,7 @@
 import type { AppSettings, Position } from '../types';
 import type { ProjectedPoint } from './projection';
 import { smoothStep } from './math';
-import { cameraFocalPixels } from './cameraOptics';
+import { cameraFocalPixels, cameraFov, perspectiveStrength, cameraBasis } from './cameraOptics';
 
 export interface CameraPoint { x: number; y: number; z: number }
 export interface SceneView {
@@ -22,21 +22,20 @@ export interface SceneView {
  * plane, not a post-projection offset of a fixed heliocentric camera.
  * Returned x/y retain the renderer's existing canvas/SVG coordinate contract.
  */
-export function createSceneView({ scale, settings, zoom, width, height, center }: {
+export function createSceneView({ scale, settings, zoom, width, height, center, observer }: {
   scale: number; settings: AppSettings; zoom: { x: number; y: number; k: number };
-  width: number; height: number; center: Position;
+  width: number; height: number; center: Position; observer?: Position | null;
 }): SceneView {
   const k = Math.max(1e-12, zoom.k), units = 1 / (scale * k);
-  const tilt = settings.viewTilt * Math.PI / 180, yaw = settings.viewYaw * Math.PI / 180;
-  const st = Math.sin(tilt), ct = Math.cos(tilt), sy = Math.sin(yaw), cy = Math.cos(yaw);
-  const right = { x: cy, y: -sy, z: 0 };
-  const down = { x: -sy * st, y: -cy * st, z: -ct };
-  const back = { x: -sy * ct, y: -cy * ct, z: st };
-  const focalPixels = cameraFocalPixels(width, height);
-  const distance = settings.enableProximitySim ? focalPixels * units : 60;
+  const { right, down, back } = cameraBasis(settings.viewTilt, settings.viewYaw, settings.viewRoll ?? 0);
+  const strength = perspectiveStrength(settings);
+  // Increase focal length AND dolly distance toward orthographic, preserving
+  // the focus-plane framing and the standard homogeneous clipping contract.
+  const focalPixels = cameraFocalPixels(width, height, cameraFov(settings)) / (strength || 1);
+  const distance = focalPixels * units;
   const focal = distance / units;
   const px = (width / 2 - zoom.x) * units, py = (height / 2 - zoom.y) * units;
-  const focus = { x: center.x + px * right.x + py * down.x,
+  const focus = observer ? { x: observer.x-back.x*distance, y: observer.y-back.y*distance, z: observer.z-back.z*distance } : { x: center.x + px * right.x + py * down.x,
     y: center.y + px * right.y + py * down.y, z: center.z + px * right.z + py * down.z };
   const cameraPosition = { x: focus.x + back.x * distance,
     y: focus.y + back.y * distance, z: focus.z + back.z * distance };
@@ -59,7 +58,7 @@ export function createSceneView({ scale, settings, zoom, width, height, center }
       screenX, screenY, camera: p, depth: (distance - p.z) * scale,
       scaleFactor: factor, isVisible, opacity: isVisible ? 1 : 0,
       distanceAU: Math.hypot(p.x, p.y, p.z),
-      contextDistanceAU: settings.enablePerspective && settings.enableProximitySim
+      contextDistanceAU: settings.enablePerspective
         ? Math.hypot(p.x, p.y, p.z) : Math.hypot(p.x, p.y, p.z - distance) };
   };
   const project = (p: Position) => projectCamera(toCamera(p));

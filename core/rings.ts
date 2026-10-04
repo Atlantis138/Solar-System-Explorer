@@ -3,7 +3,7 @@ export interface RingPoint { x: number; y: number; depth: number }
 /** Annulus halves split exactly where camera-space depth crosses the planet centre.
  * Radii are unzoomed display units, shared by both 2D renderers.
  */
-export function ringHalves(inner: number, outer: number, tilt: number, viewTilt: number, viewYaw: number) {
+export function ringHalves(inner: number, outer: number, tilt: number, viewTilt: number, viewYaw: number, viewRoll=0) {
   const rad = Math.PI / 180;
   const st = Math.sin(tilt * rad), ct = Math.cos(tilt * rad);
   const sv = Math.sin(viewTilt * rad), cv = Math.cos(viewTilt * rad);
@@ -14,7 +14,8 @@ export function ringHalves(inner: number, outer: number, tilt: number, viewTilt:
     const x = radius * Math.cos(theta), y = radius * Math.sin(theta) * ct;
     const z = radius * Math.sin(theta) * st;
     const yy = x * sy + y * cy;
-    return { x: x * cy - y * sy, y: -(yy * sv + z * cv), depth: z * sv - yy * cv };
+    const px=x*cy-y*sy, py=-(yy*sv+z*cv), cr=Math.cos(viewRoll*rad), sr=Math.sin(viewRoll*rad);
+    return { x:px*cr+py*sr, y:py*cr-px*sr, depth:z*sv-yy*cv };
   };
   const half = (from: number) => {
     const points: RingPoint[] = [];

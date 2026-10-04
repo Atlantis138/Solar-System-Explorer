@@ -1,21 +1,21 @@
-/* Keep captions legible and all transport tools reachable on narrow phones.
-   Reflow instead of shrinking type or hiding controls in a horizontal scroller. */
-@media (max-width: 600px) {
-  .simulation-toolbar.simulation-toolbar {
-    display: grid;
-    grid-template-columns: 40px 40px minmax(0, 1fr);
-    gap: 8px;
-    width: 90vw;
-    padding: 12px 16px;
-    border-radius: 24px;
-    overflow: visible;
-  }
-  .simulation-toolbar > :nth-child(3) { grid-column: 3; grid-row: 1; justify-self: end; }
-  .simulation-toolbar > :nth-child(4),
-  .simulation-toolbar > :nth-child(6) { display: none; }
-  .simulation-toolbar > :nth-child(5) {
-    grid-column: 1 / 4; grid-row: 2; justify-self: start;
-    min-width: 0; width: max-content;
-  }
-  .simulation-toolbar > :nth-child(7) { grid-column: 3; grid-row: 2; justify-self: end; }
+.simulation-toolbar-shell { position:absolute; left:16px; right:16px; bottom:calc(14px + env(safe-area-inset-bottom)); display:flex; justify-content:center; z-index:40; pointer-events:none; }
+.simulation-toolbar { display:flex; align-items:center; justify-content:center; gap:12px; max-width:100%; padding:8px 12px; border:1px solid #354052; border-radius:24px; background:#10151fe8; backdrop-filter:blur(12px); box-shadow:0 8px 30px #0007; pointer-events:auto; }
+.transport-group,.time-group,.tool-group,.speed-group { display:flex; align-items:center; justify-content:center; gap:4px; min-width:0; }
+.time-group { border-inline:1px solid #ffffff15; padding:0 10px; gap:6px; }.speed-group{margin-left:4px;gap:0;}
+.simulation-toolbar button { flex-shrink:0; width:36px; height:36px; display:flex; justify-content:center; align-items:center; color:#a6b0bf; border-radius:50%; cursor:pointer; }
+.simulation-toolbar button:hover { background:#ffffff0c;color:#e3eaf3; }.simulation-toolbar button:disabled{opacity:.3;cursor:default}.simulation-toolbar button:focus-visible{outline:2px solid #9db7cf;outline-offset:2px}
+.simulation-toolbar svg { width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round; }.simulation-toolbar svg.filled{fill:currentColor;stroke:none}
+.simulation-toolbar .play-control { background:#345c9c;color:#eff5ff;width:40px;height:40px; }.simulation-toolbar .play-control:hover{background:#416caa}.transport-group>button[aria-pressed=true]{background:#73434c;color:#f0ccd3}
+.speed-group output { min-width:43px;text-align:center;color:#9cb4d4;font:600 13px ui-monospace,monospace; }.speed-group small{font-size:11px;margin-left:1px;color:#76869e}.speed-group button{width:30px}
+.simulation-toolbar .date-control { width:auto;max-width:220px;height:auto;min-height:40px;display:flex;flex-direction:column;align-items:flex-start;border-radius:6px;padding:0 4px; }.date-control span{font-size:9px;letter-spacing:1px;color:#7d899b}.date-control strong{font-size:12px;font-weight:500;white-space:nowrap;color:#d7dfeb;font-variant-numeric:tabular-nums}
+.toolbar-star-button[aria-pressed=true] { color:#b4d0cc; background:#2a4143; }
+@media(max-width:700px) {
+  .simulation-toolbar-shell{left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom))}
+  .simulation-toolbar { display:grid;grid-template-columns:auto auto;gap:6px 12px;max-width:440px;padding:8px 12px;border-radius:20px; }
+  .transport-group {grid-column:1/3;grid-row:1;gap:6px}.time-group{grid-column:1;grid-row:2;padding:0 8px 0 0;border-left:0;gap:2px}.tool-group{grid-column:2;grid-row:2;gap:3px}.speed-group{margin-left:6px}.simulation-toolbar button{width:34px;height:34px}.speed-group button{width:34px}.speed-group output{min-width:52px}.simulation-toolbar .date-control{min-height:34px}.date-control strong{font-size:11px}.simulation-toolbar .time-group>button:last-child{width:28px}
 }
+@media(max-width:370px) { .simulation-toolbar{padding:7px 8px;gap:4px 4px}.tool-group{gap:0}.tool-group button{width:32px}.time-group{padding-right:3px}.date-control strong{font-size:10px}.simulation-toolbar .time-group>button:last-child{width:24px}.date-control span{font-size:9px} }
+@media(max-height:500px) and (min-width:580px) { .simulation-toolbar{display:flex;gap:6px;max-width:100%;padding:5px 9px}.time-group{border-left:1px solid #ffffff15;padding:0 8px}.simulation-toolbar-shell{bottom:6px}.simulation-toolbar .play-control{width:34px;height:34px} }
+.date-modal > div { max-width:calc(100vw - 24px);max-height:calc(100dvh - 24px);overflow:auto;overscroll-behavior:contain;background:var(--panel-bg);border-color:var(--panel-line);border-radius:16px; }
+.simulation-toolbar svg{width:20px;height:20px;stroke-width:2}.simulation-toolbar .play-control{background:#2563eb}.simulation-toolbar .play-control:hover{background:#3b82f6}.toolbar-star-button[aria-pressed=true]{background:#23445b;color:#9fe5ff}
+.tool-group button:hover{background:#1f2937;color:#e5e7eb}.tool-group button[aria-label="天象搜索"]:hover{color:#c084fc}.transport-group>button:first-child{background:#374151}.transport-group>button[aria-pressed=true]{background:#dc2626}.floating-panel-tools svg{stroke-width:1.8}

@@ -30,6 +30,7 @@ interface SchematicSolarSystemProps {
   zoomTransform: any;
   dimensions: { w: number, h: number };
   centerOfRotation: Position;
+  cameraEye?: Position | null;
   planets: PlanetData[];
   dwarfs: PlanetData[];
   asteroidsComets: PlanetData[];
@@ -40,14 +41,14 @@ const ORIGIN = { x: 0, y: 0, z: 0 };
 
 const SchematicSolarSystem: React.FC<SchematicSolarSystemProps> = ({
   currentDate, settings, onPlanetSelect, selectedPlanetId, cameraFocusId,
-  highlightedAlignment, pinnedPlanets, zoomTransform, dimensions, centerOfRotation,
+  highlightedAlignment, pinnedPlanets, zoomTransform, dimensions, centerOfRotation, cameraEye,
   planets, dwarfs, asteroidsComets, visibilityMap,
 }) => {
   const projectOrbit = useMemo(createOrbitProjector, []);
   const k = zoomTransform.k;
   const scene = useMemo(() => createSceneView({ scale: AU_SCALE_SCHEMATIC, settings,
-    zoom: zoomTransform, width: dimensions.w, height: dimensions.h, center: centerOfRotation }),
-  [settings, zoomTransform, dimensions, centerOfRotation]);
+    zoom: zoomTransform, width: dimensions.w, height: dimensions.h, center: centerOfRotation, observer: cameraEye }),
+  [settings, zoomTransform, dimensions, centerOfRotation, cameraEye]);
 
   const visiblePlanets = useMemo(() => [
     ...planets,
@@ -110,7 +111,7 @@ const SchematicSolarSystem: React.FC<SchematicSolarSystemProps> = ({
             const ringScale = body.radius * pos.scaleFactor * AU_SCALE_TRUE / Math.max(body.relativeRadius, .001);
             const ringLayer = (side: 'front' | 'back') => rings.map(ring =>
               <PlanetRing key={ring.id} ring={ring} radiusScale={ringScale}
-                viewTilt={settings.viewTilt} viewYaw={settings.viewYaw} side={side} />);
+                viewTilt={settings.viewTilt} viewYaw={settings.viewYaw} viewRoll={settings.viewRoll} side={side} />);
             return <g key={body.id} data-body={body.id}
               transform={`translate(${pos.x}, ${pos.y})`}
               onClick={e => { e.stopPropagation(); onPlanetSelect(body); }}

@@ -1,8 +1,13 @@
+import { createPortal } from 'react-dom';
 import './controls.css';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
 
 interface ControlsProps {
+  onOpenHelp: () => void;
+  onOpenNearby: () => void;
+  nearbyEnabled: boolean;
+  nearbyActive: boolean;
   isPlaying: boolean;
   onTogglePlay: () => void;
   onPause: () => void; 
@@ -152,10 +157,16 @@ const DatePickerModal: React.FC<DatePickerModalProps> = ({ isOpen, onClose, curr
     onClose();
   };
 
+  useEffect(() => {
+    if(!isOpen)return;
+    const key=(event:KeyboardEvent)=>{if(event.key==='Escape'){event.preventDefault();onClose();}};
+    window.addEventListener('keydown',key);
+    return()=>window.removeEventListener('keydown',key);
+  },[isOpen,onClose]);
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+  return createPortal(
+    <div role="dialog" aria-modal="true" aria-label="调整模拟日期" className="date-modal fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div 
         className="bg-gray-800 border border-gray-600 rounded-xl p-6 w-80 shadow-2xl transform transition-all" 
         onClick={e => e.stopPropagation()}
@@ -243,11 +254,12 @@ const DatePickerModal: React.FC<DatePickerModalProps> = ({ isOpen, onClose, curr
           </button>
         </div>
       </div>
-    </div>
+    </div>, document.body
   );
 };
 
 const Controls: React.FC<ControlsProps> = ({
+  onOpenHelp, onOpenNearby, nearbyEnabled, nearbyActive,
   isPlaying,
   onTogglePlay,
   onPause,
@@ -262,6 +274,16 @@ const Controls: React.FC<ControlsProps> = ({
   onOpenEvents,
   searchActive, searchEnabled
 }) => {
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const measure = () => {
+      const node=toolbarRef.current; if(!node)return;
+      const space=node.getBoundingClientRect().height+parseFloat(getComputedStyle(node).bottom)+14;
+      document.documentElement.style.setProperty('--scene-bottom-space', `${Math.ceil(space)}px`);
+    };
+    const observer=new ResizeObserver(measure);if(toolbarRef.current)observer.observe(toolbarRef.current);measure();
+    return()=>observer.disconnect();
+  },[]);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   const formatDate = (date: Date) => {
@@ -290,95 +312,45 @@ const Controls: React.FC<ControlsProps> = ({
 
   const handleOpenDatePicker = () => {
     if (!searchActive) {
+        window.dispatchEvent(new Event('navigation-stop'));
         onPause(); 
         setShowDatePicker(true);
     }
   };
 
+  useEffect(()=>{
+    const key=(e:KeyboardEvent)=>{
+      if(e.code!=='KeyT'||e.repeat||e.defaultPrevented||e.isComposing||e.ctrlKey||e.metaKey||e.altKey||document.querySelector('[aria-modal=true]')||
+        (e.target instanceof Element&&e.target.closest('input,textarea,select,[contenteditable=true]')))return;
+      e.preventDefault();handleOpenDatePicker();
+    };
+    window.addEventListener('keydown',key);return()=>window.removeEventListener('keydown',key);
+  },[searchActive,onPause]);
+
   return (
     <>
-      <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 w-auto max-w-[90vw] md:max-w-3xl lg:max-w-4xl flex justify-center z-40 pointer-events-none">
-        <div className="simulation-toolbar bg-gray-900/80 backdrop-blur-md rounded-full px-4 py-2 md:px-6 md:py-3 border border-gray-700 flex items-center gap-2 md:gap-4 shadow-2xl pointer-events-auto transition-all duration-300 overflow-x-auto custom-scrollbar shrink-0 max-w-full">
-          
-          {/* Reverse Toggle Button */}
-          <button
-            onClick={onToggleTimeDirection}
-            disabled={searchActive}
-            className={`w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center transition-all duration-300 focus:outline-none shadow-lg shrink-0 ${
-              timeDirection === -1 
-              ? 'bg-red-600 hover:bg-red-500 text-white ring-2 ring-red-400' 
-              : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-            }`}
-            title={timeDirection === -1 ? "Time Flow: Backward (Active)" : "Enable Time Reversal"}
-          >
-            <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0019 16V8a1 1 0 00-1.6-.8l-5.333 4zM4.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0011 16V8a1 1 0 00-1.6-.8l-5.334 4z" />
-            </svg>
-          </button>
-
-          {/* Play/Pause Button */}
-          <button
-            onClick={onTogglePlay}
-            disabled={searchActive}
-            className={`w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center transition-colors focus:outline-none shadow-lg shrink-0 ${searchActive ? 'bg-gray-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500'}`}
-            title={isPlaying ? "Pause (Space)" : "Play (Space)"}
-          >
-            {isPlaying ? (
-              <svg className="w-4 h-4 md:w-5 md:h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" /></svg>
-            ) : (
-              <svg className="w-4 h-4 md:w-5 md:h-5 text-white ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
-            )}
-          </button>
-
-          {/* Speed Controls */}
-          <div className="flex items-center gap-0.5 md:gap-1 shrink-0">
-            <button onClick={() => onSpeedChange(0.5)} disabled={searchActive} className={`p-1.5 md:p-2 transition-colors ${searchActive ? 'text-gray-600' : 'text-gray-400 hover:text-white'}`}>
-              <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" /></svg>
-            </button>
-            <div className="flex flex-col justify-center items-center w-14 md:w-20 shrink-0">
-              <span className="text-[10px] md:text-[10px] text-gray-500 uppercase tracking-wider text-center w-full">速率<span className="hidden sm:inline"> (Rate)</span></span>
-              <span className="font-mono font-bold text-blue-400 text-xs md:text-sm text-center w-full">
-                {Math.abs(speedMultiplier)}x
-              </span>
-            </div>
-            <button onClick={() => onSpeedChange(2)} disabled={searchActive} className={`p-1.5 md:p-2 transition-colors ${searchActive ? 'text-gray-600' : 'text-gray-400 hover:text-white'}`}>
-              <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
-            </button>
-          </div>
-
-          <div className="w-px h-6 md:h-8 bg-gray-700 mx-1 md:mx-2 shrink-0"></div>
-
-          {/* Date Display & Trigger */}
-          <div className={`flex flex-col items-center justify-center relative group min-w-[140px] md:w-48 shrink-0 ${searchActive ? 'opacity-50 pointer-events-none' : ''}`}>
-            <span className="text-[10px] md:text-[10px] text-gray-500 uppercase tracking-wider text-center w-full">当前日期<span className="hidden sm:inline"> (Date)</span></span>
-            <div 
-              onClick={handleOpenDatePicker}
-              className="font-mono text-sm md:text-base font-semibold text-white cursor-pointer hover:text-blue-300 transition-colors whitespace-nowrap w-full text-left pl-6 md:pl-8 relative"
-            >
-              {formatDate(currentDate)}
-              <svg className="w-3 h-3 md:w-4 md:h-4 absolute left-1 md:left-2 top-1/2 transform -translate-y-1/2 text-gray-500 group-hover:text-blue-300 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
+      <div ref={toolbarRef} className="simulation-toolbar-shell">
+        <div className="simulation-toolbar">
+          <div className="transport-group">
+            <button aria-label="时间反向" title="时间反向 · B" aria-pressed={timeDirection===-1} onClick={onToggleTimeDirection} disabled={searchActive}><svg viewBox="0 0 24 24"><path d="m11 6-8 6 8 6V6Zm10 0-8 6 8 6V6Z"/></svg></button>
+            <button className="play-control" aria-label={isPlaying?'暂停':'播放'} title="播放 / 暂停 · Space" onClick={onTogglePlay} disabled={searchActive}><svg viewBox="0 0 24 24" className="filled">{isPlaying?<path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>:<path d="M8 5v14l11-7z"/>}</svg></button>
+            <div className="speed-group">
+              <button aria-label="时间减速" title="减速 · −" onClick={()=>onSpeedChange(.5)} disabled={searchActive}><svg viewBox="0 0 24 24"><path d="M11 19l-7-7 7-7m8 14-7-7 7-7"/></svg></button>
+              <output title="模拟时间速率">{Math.abs(speedMultiplier)}<small>×</small></output>
+              <button aria-label="时间加速" title="加速 · +" onClick={()=>onSpeedChange(2)} disabled={searchActive}><svg viewBox="0 0 24 24"><path d="M13 5l7 7-7 7M5 5l7 7-7 7"/></svg></button>
             </div>
           </div>
-
-          <div className="w-px h-6 md:h-8 bg-gray-700 mx-1 md:mx-2 shrink-0"></div>
-
-          {/* Right Group (Tools) */}
-          <div className="flex items-center gap-0.5 md:gap-1 shrink-0">
-            {searchEnabled && <button aria-label="天象搜索" onClick={onOpenEvents} className="p-1.5 md:p-2 text-gray-400 hover:text-purple-400 hover:bg-gray-800 rounded-full transition-all">
-              <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-            </button>}
-            
-            <button onClick={onResetTime} className="p-1.5 md:p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-all" title="Reset to Now">
-              <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
+          <div className="time-group">
+            <button className="date-control" aria-label="调整模拟日期" title="调整日期 · T" onClick={handleOpenDatePicker} disabled={searchActive}>
+              <span>模拟日期</span><strong>{formatDate(currentDate)}</strong>
             </button>
-            
-            <button aria-label="打开设置" onClick={onOpenSettings} className="p-1.5 md:p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-all">
-              <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-            </button>
+            <button aria-label="回到现在" onClick={onResetTime} title="回到现在 · 0"><svg viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 0 0 4.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 0 1-15.357-2m15.357 2H15"/></svg></button>
+          </div>
+          <div className="tool-group">
+            <button aria-label="邻近恒星" title={nearbyActive?"缩放回太阳系 · N":"缩放至邻近恒星 · N"} disabled={!nearbyEnabled} aria-pressed={nearbyActive} className="toolbar-star-button" onClick={onOpenNearby}><svg viewBox="0 0 24 24"><path d="m7 5 5 7 7-5M12 12l-6 7m6-7 7 6"/><circle cx="7" cy="5" r="2"/><circle cx="19" cy="7" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="19" cy="18" r="2"/></svg></button>
+            {searchEnabled&&<button aria-label="天象搜索" title="天象搜索 · J" onClick={onOpenEvents}><svg viewBox="0 0 24 24"><circle cx="10" cy="10" r="6"/><path d="m15 15 6 6"/></svg></button>}
+            <button aria-label="打开设置" title="系统设置 · M" onClick={onOpenSettings}><svg viewBox="0 0 24 24"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/></svg></button>
+            <button aria-label="操作指南" title="操作指南 · H / ?" onClick={onOpenHelp}><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 9a3 3 0 0 1 6 0c0 2-3 2-3 4m0 3v.2"/></svg></button>
           </div>
         </div>
       </div>
