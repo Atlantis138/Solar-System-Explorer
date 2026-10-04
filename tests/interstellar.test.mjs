@@ -8,7 +8,7 @@ const {createKeplerOrbitCurve}=await importTs(new URL('../core/orbitGeometry.ts'
 const {getOrbitCurve}=await importTs(new URL('../core/orbitCache.ts',import.meta.url));
 const {parseRawTextToObjects,mergeCatalogSources,validateCatalogEdit}=await importTs(new URL('../utils/DataLoader.ts',import.meta.url));
 const {cometTailGeometry,cometActivity,drawCometTails}=await importTs(new URL('../core/cometTails.ts',import.meta.url));
-const {migrateSmallBodySettings,smallBodyVisible,revealSmallBody}=await importTs(new URL('../core/smallBodySettings.ts',import.meta.url));
+const {migrateSmallBodySettings,smallBodyVisible,revealSmallBody,cometTailVisible}=await importTs(new URL('../core/smallBodySettings.ts',import.meta.url));
 const {SYSTEM_DEFAULTS}=await importTs(new URL('../data/default_settings.ts',import.meta.url));
 const {createSceneView}=await importTs(new URL('../core/sceneView.ts',import.meta.url));
 const {renderBudget}=await importTs(new URL('../core/renderBudget.ts',import.meta.url));
@@ -72,14 +72,14 @@ test('catalog accepts signed hyperbolic elements and rejects conflicting timing,
 test('origin and body type filters work independently, with an effective umbrella and preserved legacy settings',()=>{
  const types=[catalog.allObjects.find(b=>b.id==='halley'),catalog.allObjects.find(b=>b.id==='vesta'),...visitors];
  for(const trueScale of [true,false]){
-  const s={...SYSTEM_DEFAULTS,trueScale,showComets:true,showAsteroids:false,showInterstellar:false};
+  const s={...SYSTEM_DEFAULTS,trueScale,showAsteroidsComets:true,showComets:true,showAsteroids:false,showInterstellar:false};
   assert.deepEqual(types.filter(b=>smallBodyVisible(b,s)).map(b=>b.id),['halley']);
   assert.deepEqual(types.filter(b=>smallBodyVisible(b,{...s,showInterstellar:true})).map(b=>b.id),['halley',...visitors.map(b=>b.id)]);
   assert.equal(types.filter(b=>smallBodyVisible(b,{...s,showAsteroidsComets:false})).length,0);
   assert.ok(smallBodyVisible(visitors[0],revealSmallBody(visitors[0],{...s,showAsteroidsComets:false})));
  }
  const beltOnly=migrateSmallBodySettings({showAsteroidsComets:false,showAsteroidBelt:true});
- assert.equal(beltOnly.showAsteroidsComets,true);assert.equal(beltOnly.showComets,false);assert.equal(beltOnly.showAsteroids,false);
+ assert.equal(beltOnly.showAsteroidsComets,false);assert.equal(beltOnly.showComets,false);assert.equal(beltOnly.showAsteroids,false);
  const off=migrateSmallBodySettings({showAsteroidsComets:false,showAsteroidBelt:false});assert.equal(off.showAsteroidsComets,false);
  assert.deepEqual(migrateSmallBodySettings(beltOnly),beltOnly);
 });
@@ -97,10 +97,30 @@ test('comet tails point away from the Sun on both inbound and outbound legs and 
 test('tail drawing respects the switch and each mobile rendering budget in both proportion modes',()=>{
  const b=visitors.find(b=>b.id==='borisov'),tp=date(b.elements.perihelionTimeJD),p=calculateBodyPosition(b.id,b.elements,tp);
  for(const trueScale of [false,true])for(const sceneQuality of ['eco','standard','performance']){
-  const settings={...SYSTEM_DEFAULTS,trueScale,showComets:true,renderSettings:{...SYSTEM_DEFAULTS.renderSettings,sceneQuality}};
+  const settings={...SYSTEM_DEFAULTS,trueScale,showAsteroidsComets:true,showComets:false,showInterstellar:true,showCometTails:false,renderSettings:{...SYSTEM_DEFAULTS.renderSettings,sceneQuality}};
   const scene=createSceneView({scale:65,settings,zoom:{x:400,y:300,k:2},width:800,height:600,center:p});let strokes=0;
   const ctx={save(){},restore(){},beginPath(){},moveTo(){},lineTo(){},stroke(){strokes++},arc(){},fill(){},createRadialGradient(){return {addColorStop(){}}}};
   drawCometTails(ctx,[b],tp,scene,settings);assert.ok(strokes>0);assert.ok(strokes<=renderBudget(settings.renderSettings).tailSegments*2);
-  strokes=0;drawCometTails(ctx,[b],tp,scene,{...settings,showCometTails:false});assert.equal(strokes,0);
+  strokes=0;drawCometTails(ctx,[b],tp,scene,{...settings,showInterstellarTails:false});assert.equal(strokes,0);
  }
+});
+
+test('ordinary and interstellar tails follow only their own row, including asteroid visitors',()=>{
+ const comet=catalog.allObjects.find(b=>b.id==='halley'),asteroid=catalog.allObjects.find(b=>b.id==='vesta');
+ for(const showComets of [false,true])for(const showInterstellar of [false,true])
+ for(const showCometTails of [false,true])for(const showInterstellarTails of [false,true])for(const showAsteroidsComets of [false,true]){
+  const s={...SYSTEM_DEFAULTS,showAsteroidsComets,showComets,showInterstellar,showCometTails,showInterstellarTails};
+  assert.equal(cometTailVisible(comet,s),showAsteroidsComets&&showComets&&showCometTails);
+  assert.equal(cometTailVisible(asteroid,s),false);
+  for(const b of visitors)assert.equal(cometTailVisible(b,s),b.type==='comet'&&showAsteroidsComets&&showInterstellar&&showInterstellarTails);
+ }
+});
+test('v1 preferences migrate to independent tails and unified non-main populations without losing main-belt choices',()=>{
+ const before={smallBodySettingsVersion:1,showAsteroidsComets:true,showComets:false,showAsteroids:false,showInterstellar:false,showCometTails:false,showAsteroidBelt:false,populationVisibility:{'jupiter-trojans':true,'kuiper-population':false}};
+ const after=migrateSmallBodySettings(before);
+ assert.equal(after.smallBodySettingsVersion,2);assert.equal(after.showAsteroidsComets,true);assert.equal(after.showNonMainBeltPopulations,true);
+ assert.equal(after.showCometTails,false);assert.equal(after.showInterstellarTails,false);assert.equal(after.showAsteroidBelt,false);
+ assert.equal(migrateSmallBodySettings({...before,showAsteroidsComets:false}).showNonMainBeltPopulations,false);
+ assert.equal(migrateSmallBodySettings({...before,showSmallBodyPopulations:false}).showNonMainBeltPopulations,false);
+ assert.deepEqual(migrateSmallBodySettings(after),after);
 });

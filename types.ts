@@ -130,6 +130,8 @@ export interface AppSettings {
   showAsteroids?: boolean;
   showInterstellar?: boolean;
   showCometTails?: boolean;
+  showInterstellarTails?: boolean;
+  showNonMainBeltPopulations?: boolean;
   showSmallBodyPopulations?: boolean;
   showRegionLabels: boolean; // "Show Frontiers"
   useHighPrecision: boolean; 

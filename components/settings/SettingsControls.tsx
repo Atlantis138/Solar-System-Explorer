@@ -45,3 +45,13 @@ export function Select({ label, value, onChange, children }: {
     <select aria-label={label} value={value} onChange={e => onChange(e.target.value)}>{children}</select>
   </label>;
 }
+
+/** Inline choices retain full touch targets without one full-width row each. */
+export function CompactChoice({label,ariaLabel,checked,onChange}:{
+  label:string;ariaLabel:string;checked:boolean;onChange:(checked:boolean)=>void;
+}) {
+  return <label className="settings-compact-choice">
+    <input type="checkbox" aria-label={ariaLabel} checked={checked} onChange={e=>onChange(e.target.checked)} />
+    <span>{label}</span>
+  </label>;
+}

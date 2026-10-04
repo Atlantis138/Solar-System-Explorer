@@ -1,6 +1,7 @@
 import type { PlanetData, Position, AppSettings } from '../types';
 import type { SceneView } from './sceneView';
 import { calculateBodyPosition } from '../utils/astronomy';
+import { cometTailVisible } from './smallBodySettings';
 import { renderBudget } from './renderBudget';
 
 /** Illustrative solar-driven activity, not a photometric or gas-dynamics model. */
@@ -33,10 +34,11 @@ export function cometTailGeometry(body: PlanetData, date: Date, segments: number
 /** Constant work per visible comet, no particle systems, blur filters or
  * independent animation loop. Clip in camera space before perspective divide. */
 export function drawCometTails(ctx:CanvasRenderingContext2D,bodies:PlanetData[],date:Date,scene:SceneView,settings:AppSettings) {
-  if (settings.showCometTails === false || !settings.showAsteroidsComets) return;
+  if (!settings.showAsteroidsComets) return;
   const budget=renderBudget(settings.renderSettings),count=budget.tailSegments;
   ctx.save();ctx.lineCap='round';
   for (const body of bodies) {
+    if (!cometTailVisible(body,settings)) continue;
     const geometry=cometTailGeometry(body,date,count);
     if (!geometry) continue;
     const head=scene.project(geometry.head);

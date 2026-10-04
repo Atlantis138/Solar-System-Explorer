@@ -4,8 +4,7 @@ import React, { useState } from 'react';
 import { AppSettings, RenderQuality } from '../types';
 import ObjectManager from './ObjectManager';
 import CelestialSettings from './CelestialSettings';
-import { Section, Toggle, Slider, Segments } from './settings/SettingsControls';
-import { SMALL_BODY_POPULATIONS, populationVisible, setPopulationVisible } from '../data/populations';
+import { Section, Toggle, Slider, Segments, CompactChoice } from './settings/SettingsControls';
 import { setCameraMovement } from '../core/cameraSettings';
 
 interface SettingsPanelProps {
@@ -61,7 +60,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     { value: 'eco', label: '节能' }, { value: 'standard', label: '平衡' }, { value: 'performance', label: '完整' },
   ];
   return <>
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
+    {!showObjectManager && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
       <div className="settings-dialog" role="dialog" aria-modal="true" aria-label="系统设置" onClick={e => e.stopPropagation()}>
         <header className="settings-header"><div><h2>系统设置</h2><p>调整天体、视角与星空的呈现</p></div>
           <button type="button" className="settings-close" aria-label="关闭设置" onClick={onClose}>×</button>
@@ -73,18 +72,22 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               <Toggle label="真实比例大小" checked={settings.trueScale} onChange={value => set({ trueScale: value })} />
               <Toggle label="显示海王星外天体与矮行星" checked={settings.showDwarfPlanets} onChange={value => set({ showDwarfPlanets: value })} />
               <Toggle label="显示彗星与小行星" checked={settings.showAsteroidsComets} onChange={value => set({ showAsteroidsComets: value })} />
-              {settings.showAsteroidsComets && <div className="settings-subgroup" role="group" aria-label="彗星与小行星详细设置">
-                <Toggle label="太阳系彗星" checked={settings.showComets !== false} onChange={value => set({showComets:value})} />
-                <Toggle label="太阳系小行星" checked={settings.showAsteroids !== false} onChange={value => set({showAsteroids:value})} />
-                <Toggle label="星际天体" checked={settings.showInterstellar !== false} onChange={value => set({showInterstellar:value})} />
-                <Toggle label="显示彗尾" checked={settings.showCometTails !== false} onChange={value => set({showCometTails:value})} />
-                <Toggle label="小行星带与小天体族群" checked={settings.showSmallBodyPopulations !== false} onChange={value => set({showSmallBodyPopulations:value})} />
-                {settings.showSmallBodyPopulations !== false && <details className="settings-subgroup">
-                  <summary className="settings-note cursor-pointer">选择族群</summary>
-                  {SMALL_BODY_POPULATIONS.map(population => <Toggle key={population.id} label={population.name}
-                    checked={populationVisible(population,settings)}
-                    onChange={value => onSettingsChange(setPopulationVisible(settings,population.id,value))} />)}
-                </details>}
+              {settings.showAsteroidsComets && <div className="settings-small-bodies" role="group" aria-label="彗星与小行星详细设置">
+                <div className="settings-compact-row" role="group" aria-label="小行星设置">
+                  <span>小行星</span>
+                  <CompactChoice label="天体" ariaLabel="显示小行星" checked={settings.showAsteroids !== false} onChange={value => set({showAsteroids:value})} />
+                  <CompactChoice label="非主带族群" ariaLabel="显示非主带族群" checked={settings.showNonMainBeltPopulations === true} onChange={value => set({showNonMainBeltPopulations:value})} />
+                </div>
+                <div className="settings-compact-row" role="group" aria-label="彗星设置">
+                  <span>彗星</span>
+                  <CompactChoice label="天体" ariaLabel="显示彗星" checked={settings.showComets !== false} onChange={value => set({showComets:value})} />
+                  <CompactChoice label="彗尾" ariaLabel="显示彗星彗尾" checked={settings.showCometTails !== false} onChange={value => set({showCometTails:value})} />
+                </div>
+                <div className="settings-compact-row" role="group" aria-label="星际天体设置">
+                  <span>星际天体</span>
+                  <CompactChoice label="天体" ariaLabel="显示星际天体" checked={settings.showInterstellar !== false} onChange={value => set({showInterstellar:value})} />
+                  <CompactChoice label="彗尾（若有）" ariaLabel="显示星际彗尾" checked={settings.showInterstellarTails !== false} onChange={value => set({showInterstellarTails:value})} />
+                </div>
               </div>}
               <Toggle label="显示太阳系边界" description="柯伊伯带与日球层顶" checked={settings.showRegionLabels} onChange={value => set({ showRegionLabels: value })} />
               <div className="settings-divider"><Slider label="轨道可见度" max={1} value={settings.orbitOpacity} onChange={value => set({ orbitOpacity: value })} /></div>
@@ -123,7 +126,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
           {onClearDefaults && <button className="settings-button" onClick={() => handleAction(onClearDefaults, '已清除偏好')}>清除偏好</button>}
         </div><div role="status" className="settings-feedback">{feedback}</div></footer>
       </div>
-    </div>
+    </div>}
     {showObjectManager && <ObjectManager settings={settings} onSettingsChange={onSettingsChange} bodies={allBodies} visibilityMap={visibilityMap} onToggleVisibility={onToggleVisibility} onClose={() => setShowObjectManager(false)} onDataReload={onDataReload} onJumpToEncounter={onJumpToEncounter} />}
   </>;
 };

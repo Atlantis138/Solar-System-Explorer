@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import type { AppSettings, Position, PlanetData } from '../../types';
 import type { SceneView } from '../../core/sceneView';
+import { cometTailVisible } from '../../core/smallBodySettings';
 import { drawCometTails } from '../../core/cometTails';
 import { drawOrbitPaths, type OrbitPath } from '../../core/orbitDrawing';
 import { drawRegionBoundaries } from '../../core/regionDrawing';
@@ -38,7 +39,7 @@ export const CometTailLayer=React.memo(function CometTailLayer({bodies,visibilit
   bodies:PlanetData[];visibilityMap:Record<string,boolean>;scene:SceneView;settings:AppSettings;date:Date;
 }) {
   const ref=useRef<HTMLCanvasElement>(null);
-  const comets=bodies.filter(body=>body.type==='comet'&&visibilityMap[body.id]!==false);
+  const comets=bodies.filter(body=>cometTailVisible(body,settings)&&visibilityMap[body.id]!==false);
   useCanvasDraw(ref,ctx=>drawCometTails(ctx,comets,date,scene,settings),
     [bodies,visibilityMap,scene,settings,date],renderBudget(settings.renderSettings).maxDpr);
   return <canvas ref={ref} data-layer="comet-tails" className="absolute inset-0 z-0 w-full h-full pointer-events-none"/>;

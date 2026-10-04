@@ -1,0 +1,4 @@
+.catalog-dialog { height:85vh; height:85dvh; min-height:0; }
+.catalog-scroll { touch-action:pan-y; overscroll-behavior-y:contain; -webkit-overflow-scrolling:touch; }
+.catalog-tooltip { display:none; }
+@media(hover:hover) and (pointer:fine) { .catalog-info:hover .catalog-tooltip { display:block; } }

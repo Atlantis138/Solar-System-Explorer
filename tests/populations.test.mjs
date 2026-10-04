@@ -13,23 +13,29 @@ const catalog=mergeCatalogSources(text),jupiter=catalog.planets.find(p=>p.id==='
 const date=new Date('2000-01-01T12:00:00Z');
 const reference={body:jupiter,position:{x:5.2,y:0,z:0}};
 
-test('population switches preserve main-belt preferences, obey the umbrella and remain independent of proportion',()=>{
+test('main belt is independent; non-main populations share one switch in both proportion modes',()=>{
  assert.deepEqual(SMALL_BODY_POPULATIONS.filter(p=>populationVisible(p,SYSTEM_DEFAULTS)).map(p=>p.id),['main-asteroid-belt']);
  let settings=setPopulationVisible(SYSTEM_DEFAULTS,'main-asteroid-belt',false);
  settings=setPopulationVisible(settings,'jupiter-trojans',true);
  for(const trueScale of [false,true])for(const showAsteroidsComets of [false,true]) {
   const s={...settings,trueScale,showAsteroidsComets};
-  assert.deepEqual(SMALL_BODY_POPULATIONS.filter(p=>populationVisible(p,s)).map(p=>p.id),showAsteroidsComets?['jupiter-trojans']:[]);
+  assert.deepEqual(SMALL_BODY_POPULATIONS.filter(p=>populationVisible(p,s)).map(p=>p.id),showAsteroidsComets?['jupiter-trojans','kuiper-population']:[]);
  }
+ for(const showAsteroidsComets of [false,true])for(const showNonMainBeltPopulations of [false,true]) {
+  const main=SMALL_BODY_POPULATIONS[0];
+  assert.equal(populationVisible(main,{...SYSTEM_DEFAULTS,showAsteroidsComets,showNonMainBeltPopulations}),true);
+  assert.equal(populationVisible(main,{...SYSTEM_DEFAULTS,showAsteroidsComets,showNonMainBeltPopulations,showAsteroidBelt:false}),false);
+ }
+ assert.equal(setPopulationVisible({...SYSTEM_DEFAULTS,showAsteroidsComets:false},'main-asteroid-belt',true).showAsteroidsComets,false);
  assert.equal(SYSTEM_DEFAULTS.showAsteroidBelt,true,'switch helpers must not mutate defaults');
- assert.deepEqual(SMALL_BODY_POPULATIONS.filter(p=>populationVisible(p,JSON.parse(JSON.stringify(settings)))).map(p=>p.id),['jupiter-trojans']);
+ assert.deepEqual(SMALL_BODY_POPULATIONS.filter(p=>populationVisible(p,JSON.parse(JSON.stringify(settings)))).map(p=>p.id),['jupiter-trojans','kuiper-population']);
 });
 test('all enabled populations together stay within each quality budget, in either scale',()=>{
  const projected=[],scene={project(world){projected.push(world);return {x:0,y:0,scaleFactor:1,isVisible:true,distanceAU:1};},projectedRadius(){return 5000;},rangeOpacity(){return 1;}};
  for(const trueScale of [false,true])for(const sceneQuality of ['eco','standard','performance']) {
   let arcs=0,fills=0;
   const ctx={save(){},restore(){},beginPath(){},moveTo(){},arc(){arcs++;},fill(){fills++;}};
-  const settings={...SYSTEM_DEFAULTS,trueScale,populationVisibility:{'jupiter-trojans':true,'kuiper-population':true},renderSettings:{...SYSTEM_DEFAULTS.renderSettings,sceneQuality}};
+  const settings={...SYSTEM_DEFAULTS,trueScale,showAsteroidsComets:true,showNonMainBeltPopulations:true,renderSettings:{...SYSTEM_DEFAULTS.renderSettings,sceneQuality}};
   drawAsteroidBelt(ctx,800,600,65,settings,{x:400,y:300,k:1},{x:0,y:0,z:0},date,.6,scene,reference);
   const budget=renderBudget(settings.renderSettings).beltParticles;
   assert.ok(arcs<=budget&&arcs>budget-3);assert.equal(fills,3);

@@ -1,6 +1,8 @@
 
 
 import React, { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
+import './object-manager.css';
 import PopulationCatalog, { PopulationParameters } from './PopulationCatalog';
 import OrbitCategoryControl from './OrbitCategoryControl';
 import { orbitCategoryForBody, ORBIT_SECTION_CATEGORIES } from '../core/orbitCategories';
@@ -308,8 +310,8 @@ const ObjectManager: React.FC<ObjectManagerProps> = ({ bodies, settings, onSetti
       }
   };
 
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm" onClick={onClose}>
+  return createPortal(
+    <div className="catalog-overlay fixed inset-0 z-[60] flex items-center justify-center bg-black/80" onClick={onClose}>
       
       {/* --- Custom Confirmation Modal Overlay --- */}
       {confirmModal.isOpen && (
@@ -337,7 +339,7 @@ const ObjectManager: React.FC<ObjectManagerProps> = ({ bodies, settings, onSetti
       )}
 
       {/* Main Modal Container */}
-      <div role="dialog" aria-modal="true" aria-label="天体目录" className="bg-gray-900/90 backdrop-blur-xl border border-gray-700/50 rounded-xl w-[95%] md:w-[90%] max-w-6xl mx-auto h-[85vh] flex flex-col shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div role="dialog" aria-modal="true" aria-label="天体目录" className="catalog-dialog bg-gray-900 border border-gray-700/50 rounded-xl w-[95%] md:w-[90%] max-w-6xl mx-auto flex flex-col shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         
         {/* Header */}
         <div className="flex items-center justify-between gap-2 p-3 sm:p-4 border-b border-gray-700/50 bg-gray-800/50 shrink-0">
@@ -366,11 +368,11 @@ const ObjectManager: React.FC<ObjectManagerProps> = ({ bodies, settings, onSetti
         </div>
 
         {/* Main Content Area (Split View) */}
-        <div className="flex flex-1 overflow-hidden flex-col md:flex-row relative">
+        <div className="flex flex-1 min-h-0 overflow-hidden flex-col md:flex-row relative">
           
           {/* Left: Object List */}
-          <div className={`flex-1 flex flex-col border-r border-gray-700/50 bg-transparent transition-all duration-300 min-h-0 ${isPanelOpen ? 'md:max-w-[60%]' : 'md:max-w-full'} ${isPanelOpen ? 'hidden md:flex' : 'flex'}`}>
-             <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-6 custom-scrollbar">
+          <div className={`flex-1 flex flex-col border-r border-gray-700/50 bg-transparent min-h-0 ${isPanelOpen ? 'md:max-w-[60%]' : 'md:max-w-full'} ${isPanelOpen ? 'hidden md:flex' : 'flex'}`}>
+             <div className="catalog-scroll flex-1 min-h-0 overflow-y-auto px-4 pb-4 space-y-6 custom-scrollbar">
                 {Object.entries(groupedBodies).map(([category, items]) => (
                   <div key={category} data-catalog-category={category} className="space-y-2">
                     <div className="flex items-center justify-between flex-wrap gap-x-2 gap-y-1 border-b border-gray-700 pt-3 pb-1 mb-2 sticky top-0 bg-gray-900 z-10">
@@ -433,12 +435,12 @@ const ObjectManager: React.FC<ObjectManagerProps> = ({ bodies, settings, onSetti
                                  </button>
                               )}
 
-                              <div className="relative group">
+                              <div className="relative catalog-info">
                                 <svg className="w-4 h-4 text-gray-600 hover:text-blue-400 cursor-help transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
                                 {/* Tooltip for Raw Config */}
-                                <div className="absolute bottom-full right-0 mb-2 w-64 bg-black/90 border border-gray-600 p-2 rounded shadow-xl z-50 hidden group-hover:block pointer-events-none">
+                                <div className="absolute bottom-full right-0 mb-2 w-64 bg-black/90 border border-gray-600 p-2 rounded shadow-xl z-50 catalog-tooltip pointer-events-none">
                                   <p className="text-[10px] text-gray-500 mb-1 uppercase font-bold">Config Data</p>
                                   <pre className="text-[10px] text-gray-300 whitespace-pre-wrap font-mono max-h-32 overflow-y-auto">{body.rawContent || "No raw content available."}</pre>
                                 </div>
@@ -516,7 +518,8 @@ const ObjectManager: React.FC<ObjectManagerProps> = ({ bodies, settings, onSetti
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

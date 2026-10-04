@@ -8,12 +8,12 @@ export default function PopulationCatalog({settings,onSettingsChange,onInspect,s
 }) {
   return <>{SMALL_BODY_POPULATIONS.map(population=><div key={population.id} data-population={population.id}
     className="flex items-center justify-between gap-2 p-2 rounded border border-gray-700/50 bg-gray-800/30 hover:bg-gray-700/50">
-    <label className="flex items-center gap-2 min-w-0 cursor-pointer">
-      <input type="checkbox" aria-label={`显示${population.name}`} checked={populationVisible(population,settings)}
+    <div className="flex items-center gap-2 min-w-0">
+      {population.id === 'main-asteroid-belt' && <input id={`population-${population.id}`} type="checkbox" aria-label={`显示${population.name}`} checked={populationVisible(population,settings)}
         onChange={e=>onSettingsChange(setPopulationVisible(settings,population.id,e.target.checked))}
-        className="w-3.5 h-3.5 shrink-0 rounded accent-blue-500" />
-      <span className="text-xs font-medium text-gray-200 truncate" title={population.englishName}>{showIds?population.id:population.name}</span>
-    </label>
+        className="w-3.5 h-3.5 shrink-0 rounded accent-blue-500" />}
+      <label htmlFor={population.id === 'main-asteroid-belt' ? `population-${population.id}` : undefined} className="text-xs font-medium text-gray-200 truncate" title={population.englishName}>{showIds?population.id:population.name}</label>
+    </div>
     <div className="flex items-center gap-1.5 shrink-0">
       <span className="text-[10px] text-gray-500">族群</span>
       <button type="button" onClick={()=>onInspect(population)} aria-label={`查看${population.name}参数`} title="分布参数"
