@@ -369,10 +369,10 @@ const ObjectManager: React.FC<ObjectManagerProps> = ({ bodies, settings, onSetti
           
           {/* Left: Object List */}
           <div className={`flex-1 flex flex-col border-r border-gray-700/50 bg-transparent transition-all duration-300 min-h-0 ${isPanelOpen ? 'md:max-w-[60%]' : 'md:max-w-full'} ${isPanelOpen ? 'hidden md:flex' : 'flex'}`}>
-             <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
+             <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-6 custom-scrollbar">
                 {Object.entries(groupedBodies).map(([category, items]) => (
                   <div key={category} data-catalog-category={category} className="space-y-2">
-                    <div className="flex items-center justify-between flex-wrap gap-x-2 gap-y-1 border-b border-gray-700 pb-1 mb-2 sticky top-0 bg-gray-900 z-10">
+                    <div className="flex items-center justify-between flex-wrap gap-x-2 gap-y-1 border-b border-gray-700 pt-3 pb-1 mb-2 sticky top-0 bg-gray-900 z-10">
                     <h3 className="text-xs font-bold text-gray-500">
                       {({PLANET:'行星',DWARF:'矮行星与候选天体',ASTEROID:'小行星与其他小天体',COMET:'彗星',SATELLITE:'天然卫星',RING:'行星环'} as Record<string,string>)[category] ?? category}
                     </h3>
