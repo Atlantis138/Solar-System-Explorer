@@ -5,6 +5,7 @@ import { AppSettings, RenderQuality } from '../types';
 import ObjectManager from './ObjectManager';
 import CelestialSettings from './CelestialSettings';
 import { Section, Toggle, Slider, Segments } from './settings/SettingsControls';
+import { SMALL_BODY_POPULATIONS, populationVisible, setPopulationVisible } from '../data/populations';
 import { setCameraMovement } from '../core/cameraSettings';
 
 interface SettingsPanelProps {
@@ -21,6 +22,7 @@ interface SettingsPanelProps {
   visibilityMap: Record<string, boolean>;
   onToggleVisibility: (id: string) => void;
   onDataReload: () => void;
+  onJumpToEncounter: (body: PlanetData) => void;
 }
 
 import { PlanetData } from '../types';
@@ -36,7 +38,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   allBodies,
   visibilityMap,
   onToggleVisibility,
-  onDataReload
+  onDataReload,
+  onJumpToEncounter
 }) => {
   
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -68,9 +71,21 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             <Section title="天体对象" theme="orange" action={<button className="settings-button" onClick={() => setShowObjectManager(true)}>管理天体</button>}>
               <Toggle label="高精度天文引擎" description="启用精确位置计算与天象搜索" checked={settings.useHighPrecision} onChange={value => set({ useHighPrecision: value })} />
               <Toggle label="真实比例大小" checked={settings.trueScale} onChange={value => set({ trueScale: value })} />
-              <Toggle label="显示小行星主带" checked={settings.showAsteroidBelt} onChange={value => set({ showAsteroidBelt: value })} />
               <Toggle label="显示海王星外天体与矮行星" checked={settings.showDwarfPlanets} onChange={value => set({ showDwarfPlanets: value })} />
               <Toggle label="显示彗星与小行星" checked={settings.showAsteroidsComets} onChange={value => set({ showAsteroidsComets: value })} />
+              {settings.showAsteroidsComets && <div className="settings-subgroup" role="group" aria-label="彗星与小行星详细设置">
+                <Toggle label="太阳系彗星" checked={settings.showComets !== false} onChange={value => set({showComets:value})} />
+                <Toggle label="太阳系小行星" checked={settings.showAsteroids !== false} onChange={value => set({showAsteroids:value})} />
+                <Toggle label="星际天体" checked={settings.showInterstellar !== false} onChange={value => set({showInterstellar:value})} />
+                <Toggle label="显示彗尾" checked={settings.showCometTails !== false} onChange={value => set({showCometTails:value})} />
+                <Toggle label="小行星带与小天体族群" checked={settings.showSmallBodyPopulations !== false} onChange={value => set({showSmallBodyPopulations:value})} />
+                {settings.showSmallBodyPopulations !== false && <details className="settings-subgroup">
+                  <summary className="settings-note cursor-pointer">选择族群</summary>
+                  {SMALL_BODY_POPULATIONS.map(population => <Toggle key={population.id} label={population.name}
+                    checked={populationVisible(population,settings)}
+                    onChange={value => onSettingsChange(setPopulationVisible(settings,population.id,value))} />)}
+                </details>}
+              </div>}
               <Toggle label="显示太阳系边界" description="柯伊伯带与日球层顶" checked={settings.showRegionLabels} onChange={value => set({ showRegionLabels: value })} />
               <div className="settings-divider"><Slider label="轨道可见度" max={1} value={settings.orbitOpacity} onChange={value => set({ orbitOpacity: value })} /></div>
             </Section>
@@ -109,7 +124,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
         </div><div role="status" className="settings-feedback">{feedback}</div></footer>
       </div>
     </div>
-    {showObjectManager && <ObjectManager settings={settings} onSettingsChange={onSettingsChange} bodies={allBodies} visibilityMap={visibilityMap} onToggleVisibility={onToggleVisibility} onClose={() => setShowObjectManager(false)} onDataReload={onDataReload} />}
+    {showObjectManager && <ObjectManager settings={settings} onSettingsChange={onSettingsChange} bodies={allBodies} visibilityMap={visibilityMap} onToggleVisibility={onToggleVisibility} onClose={() => setShowObjectManager(false)} onDataReload={onDataReload} onJumpToEncounter={onJumpToEncounter} />}
   </>;
 };
 export default SettingsPanel;

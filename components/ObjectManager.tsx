@@ -15,6 +15,7 @@ interface ObjectManagerProps {
   onToggleVisibility: (id: string) => void;
   onClose: () => void;
   onDataReload: () => void;
+  onJumpToEncounter: (body: PlanetData) => void;
 }
 
 const CATEGORY_TEMPLATES: Record<string, string> = {
@@ -110,7 +111,7 @@ const splitTextIntoBlocks = (text: string): string[] => {
     return blocks;
 };
 
-const ObjectManager: React.FC<ObjectManagerProps> = ({ bodies, settings, onSettingsChange, visibilityMap, onToggleVisibility, onClose, onDataReload }) => {
+const ObjectManager: React.FC<ObjectManagerProps> = ({ bodies, settings, onSettingsChange, visibilityMap, onToggleVisibility, onClose, onDataReload, onJumpToEncounter }) => {
   const [showIds, setShowIds] = useState(false);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [activePopulation,setActivePopulation]=useState<SmallBodyPopulation|null>(null);
@@ -404,6 +405,7 @@ const ObjectManager: React.FC<ObjectManagerProps> = ({ bodies, settings, onSetti
                                 {!!body.dataWarnings?.length && <span className="text-[10px] text-amber-300" title={body.dataWarnings.join('\n')}>参数待补充</span>}
                               </div>
 
+                              {body.interstellar && <span className="text-[10px] text-blue-400/80 shrink-0">星际</span>}
                               {body.isCustom && (
                                 <span className="px-1 py-0.5 bg-purple-900/50 border border-purple-500/30 text-purple-300 text-[10px] rounded uppercase tracking-wide shrink-0">
                                   User
@@ -412,6 +414,13 @@ const ObjectManager: React.FC<ObjectManagerProps> = ({ bodies, settings, onSetti
                             </div>
 
                             <div className="flex items-center gap-1 shrink-0 ml-2">
+                              {body.elements?.perihelionTimeJD !== undefined && <button type="button"
+                                onClick={() => onJumpToEncounter(body)}
+                                aria-label={`跳转到${body.name}近日点`}
+                                title={`${new Date((body.elements.perihelionTimeJD-2440587.5)*86400000).toISOString().slice(0,10)} · 近日点并定位`}
+                                className="px-1 py-1 rounded text-[11px] tabular-nums text-blue-300 hover:bg-blue-900/30">
+                                {new Date((body.elements.perihelionTimeJD-2440587.5)*86400000).getUTCFullYear()}
+                              </button>}
                               <button onClick={() => handleEdit(body)} aria-label={`编辑${body.name}`} title="编辑数据" className="p-1 rounded text-gray-400 hover:text-blue-300 hover:bg-blue-900/20">
                                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M16 4l4 4M4 20l4-1L20 7a2.8 2.8 0 00-4-4L4 15v5z" /></svg>
                               </button>
@@ -472,7 +481,7 @@ const ObjectManager: React.FC<ObjectManagerProps> = ({ bodies, settings, onSetti
                  <p className="text-xs text-gray-400">
                     ID 必须唯一。massRelativeToSun 为天体自身质量 ÷ 太阳质量；elements 顺序为 a e i N w M，a 用 AU，角度用度（J2000 黄道坐标）。卫星 a 是与母体的相对距离。
                  </p>
-                 <p className="text-[11px] text-gray-500 mt-2">epochJD 指定历元，periodDays 可指定周期（天），填写后优先于质量推算周期。相互绕转需要母体和卫星的质量；未知值不会自动猜测。修改质量、轨道或新增卫星后，该系统按输入参数计算，其他系统仍可使用高精度引擎。</p>
+                 <p className="text-[11px] text-gray-500 mt-2">epochJD 指定历元；椭圆可用 periodDays 指定周期（天）。双曲线用负半长轴 a 和 e &gt; 1，perihelionTimeJD 指定近日点（M 设为 0）；interstellar: true 标记星际来访，不改变分类。相互绕转需要母体和卫星的质量；未知值不会自动猜测。修改质量、轨道或新增卫星后，该系统按输入参数计算，其他系统仍可使用高精度引擎。</p>
                  {editingBody && !editingBody.parentId && !editingBody.massRelativeToSun && <p className="text-[11px] text-amber-300 mt-2">此天体尚无质量数据。可添加 massRelativeToSun: 数值；如需把它的轨道作为系统质心轨道，可添加 orbitReference: system-barycenter。请注明假设或数据来源。</p>}
               </div>
 

@@ -7,6 +7,8 @@ import { calculatePlanetarySystem, calculateSystemLocalOrbits } from '../../util
 import { createSceneView } from '../../core/sceneView';
 import { evaluateBodyVisibility, VISIBILITY_THRESHOLD } from '../../core/renderConfig';
 import { PlanetData, Position, AppSettings, PinnedPlanet } from '../../types';
+import { smallBodyVisible } from '../../core/smallBodySettings';
+import { CometTailLayer } from './SceneLayers';
 import { getOrbitCurve } from '../../core/orbitCache';
 import { curveFromOrbitPoints } from '../../core/orbitGeometry';
 import { bodyOrbitOpacity, orbitCategoryForBody } from '../../core/orbitCategories';
@@ -50,8 +52,8 @@ const TrueScaleSolarSystem: React.FC<TrueScaleSolarSystemProps> = ({
   const visibleBodies = useMemo(() => [
     ...planets,
     ...(settings.showDwarfPlanets ? dwarfs : []),
-    ...(settings.showAsteroidsComets ? asteroidsComets : []),
-  ], [settings.showDwarfPlanets, settings.showAsteroidsComets, planets, dwarfs, asteroidsComets]);
+    ...asteroidsComets.filter(body => smallBodyVisible(body,settings)),
+  ], [settings.showDwarfPlanets, settings.showAsteroidsComets, settings.showComets, settings.showAsteroids, settings.showInterstellar, planets, dwarfs, asteroidsComets]);
 
   const systems = useMemo(() => new Map(visibleBodies.map(parent =>
     [parent.id, calculatePlanetarySystem(parent, currentDate, settings.useHighPrecision)])),
@@ -137,6 +139,7 @@ const TrueScaleSolarSystem: React.FC<TrueScaleSolarSystemProps> = ({
   return <>
     <OrbitLayer paths={paths} scene={scene} settings={settings} zoom={zoomTransform} />
     {hasVisiblePopulations(settings) && <BeltLayer scene={scene} settings={settings} zoom={zoomTransform} center={centerOfRotation} date={currentDate} referenceBody={planets.find(p=>p.id==='jupiter')} />}
+    {settings.showCometTails !== false && visibleBodies.some(body => body.type === 'comet' && visibilityMap[body.id] !== false) && <CometTailLayer bodies={visibleBodies} visibilityMap={visibilityMap} scene={scene} settings={settings} date={currentDate} />}
     <svg className="absolute inset-0 z-10 w-full h-full overflow-visible pointer-events-none">
       <g transform={zoomTransform.toString()}>
         {[...systems.values()].filter(system => system.usesBarycenter && visibilityMap[system.parent.id] !== false).map(system => {

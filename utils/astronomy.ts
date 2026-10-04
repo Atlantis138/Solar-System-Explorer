@@ -1,5 +1,7 @@
 import { OrbitalElements, Position, PlanetData, EventType } from '../types';
 import { J2000_DATE, MILLISECONDS_PER_DAY } from '../data/constants';
+import { createKeplerOrbitCurve } from '../core/orbitGeometry';
+import { solveHyperbolicAnomaly } from '../core/conicOrbit';
 
 declare const Astronomy: any;
 
@@ -30,15 +32,18 @@ const solveKepler = (M: number, e: number): number => {
 
 // --- Method A: J2000 Kepler Calculation (Fast, Approximate) ---
 const calculateKeplerPosition = (elements: OrbitalElements, date: Date, centralMassMultiplier: number = 1.0): Position => {
-  const epochMs = elements.epochJD === undefined ? J2000_DATE.getTime() : (elements.epochJD - 2440587.5) * MILLISECONDS_PER_DAY;
+  const epochMs = (elements.perihelionTimeJD ?? elements.epochJD) === undefined ? J2000_DATE.getTime() : ((elements.perihelionTimeJD ?? elements.epochJD)! - 2440587.5) * MILLISECONDS_PER_DAY;
   const dayDiff = (date.getTime() - epochMs) / MILLISECONDS_PER_DAY;
-  const n = elements.periodDays ? 360 / elements.periodDays : (0.9856076686 * centralMassMultiplier) / Math.pow(elements.a, 1.5);
-  const M_curr = normalizeAngle(elements.M + n * dayDiff);
+  const n = elements.periodDays ? 360 / elements.periodDays : (0.9856076686 * centralMassMultiplier) / Math.pow(Math.abs(elements.a), 1.5);
+  const mean = (elements.perihelionTimeJD === undefined ? elements.M : 0) + n * dayDiff;
+  const M_curr = elements.e > 1 ? mean : normalizeAngle(mean);
   
-  const E = solveKepler(M_curr, elements.e);
+  const hyperbolic = elements.e > 1;
+  const E = hyperbolic ? solveHyperbolicAnomaly(deg2rad(M_curr), elements.e) : solveKepler(M_curr, elements.e);
   
-  const xv = elements.a * (Math.cos(E) - elements.e);
-  const yv = elements.a * (Math.sqrt(1 - elements.e * elements.e) * Math.sin(E));
+  const xv = hyperbolic ? -elements.a * (elements.e - Math.cosh(E)) : elements.a * (Math.cos(E) - elements.e);
+  const yv = hyperbolic ? -elements.a * Math.sqrt(elements.e * elements.e - 1) * Math.sinh(E)
+    : elements.a * Math.sqrt(1 - elements.e * elements.e) * Math.sin(E);
   const v = Math.atan2(yv, xv);
   const r = Math.sqrt(xv*xv + yv*yv);
 
@@ -57,43 +62,8 @@ const calculateKeplerPosition = (elements: OrbitalElements, date: Date, centralM
 
 // --- Method C: Geometric Orbit Path (Eccentric Anomaly Iteration) ---
 export const calculateOrbitPath = (elements: OrbitalElements, steps: number = 90): Position[] => {
-  const positions: Position[] = [];
-  const i_rad = deg2rad(elements.i);
-  const N_rad = deg2rad(elements.N);
-  const w_rad = deg2rad(elements.w);
-
-  const a = elements.a;
-  const e = elements.e;
-  const b = a * Math.sqrt(1 - e * e); // Semi-minor axis
-
-  const cosN = Math.cos(N_rad);
-  const sinN = Math.sin(N_rad);
-  const cosI = Math.cos(i_rad);
-  const sinI = Math.sin(i_rad);
-  const cosW = Math.cos(w_rad);
-  const sinW = Math.sin(w_rad);
-  
-  const Px = cosN * cosW - sinN * sinW * cosI;
-  const Py = sinN * cosW + cosN * sinW * cosI;
-  const Pz = sinW * sinI;
-
-  const Qx = -cosN * sinW - sinN * cosW * cosI;
-  const Qy = -sinN * sinW + cosN * cosW * cosI;
-  const Qz = cosW * sinI;
-
-  for (let k = 0; k <= steps; k++) {
-    const E = (k / steps) * 2 * Math.PI;
-    const x_orb = a * (Math.cos(E) - e);
-    const y_orb = b * Math.sin(E);
-
-    const x = x_orb * Px + y_orb * Qx;
-    const y = x_orb * Py + y_orb * Qy;
-    const z = x_orb * Pz + y_orb * Qz;
-
-    positions.push({ x, y, z });
-  }
-
-  return positions;
+  const curve = createKeplerOrbitCurve(elements);
+  return Array.from({ length: steps + 1 }, (_, k) => curve.at(k / steps));
 };
 
 // --- Method B: High Precision Astronomy Engine ---
@@ -253,10 +223,10 @@ export function describeBodyMotion(body: PlanetData, roots: PlanetData[], date: 
   const resolved=parent ? root.satellites!.find(m=>m.id===body.id)! : root;
   const edited=root.isCustom||root.hasCustomOrbit||root.hasCustomDynamics;
   if(!parent) return {
-    label:system.preciseParent?'高精度星历':'目录轨道（开普勒）',
+    label:system.preciseParent?'高精度星历':root.elements.e>1?'双曲线轨道（开普勒）':'目录轨道（开普勒）',
     note:system.preciseParent
       ? '位置由天文引擎给出；按其天体中心或系统质心定义处理，不重复叠加偏移。'
-      : (edited?'此系统的质量、轨道或成员已修改，使用目录中的当前参数。':'按目录轨道参数和当前日期计算。')+'这不是逐帧引力积分。',
+      : (edited?'此系统的质量、轨道或成员已修改，使用目录中的当前参数。':'按目录轨道参数和当前日期计算。')+(root.elements.e>1?'双曲线只经过太阳一次，不循环；远离历元后的结果是两体外推，未计入行星摄动与喷气加速。':'这不是逐帧引力积分。'),
   };
   const relativePrecise=system.relativeStates.get(body.id)?.precise===true;
   const anchor=system.preciseParent?'高精度星历':'目录轨道';

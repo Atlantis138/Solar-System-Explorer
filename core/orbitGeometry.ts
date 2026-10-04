@@ -25,14 +25,28 @@ export interface OrbitSamplingView {
   };
 }
 
-export function createKeplerOrbitCurve(elements: OrbitalElements): OrbitCurve {
+export function createKeplerOrbitCurve(elements: OrbitalElements, extentAU = 200): OrbitCurve {
   const radians = Math.PI / 180;
   const N = elements.N * radians, i = elements.i * radians, w = elements.w * radians;
   const cosN = Math.cos(N), sinN = Math.sin(N), cosI = Math.cos(i), sinI = Math.sin(i);
   const cosW = Math.cos(w), sinW = Math.sin(w), a = elements.a, e = elements.e;
-  const b = a * Math.sqrt(1 - e * e);
+  const b = Math.abs(a) * Math.sqrt(Math.abs(1 - e * e));
   const P = { x: cosN * cosW - sinN * sinW * cosI, y: sinN * cosW + cosN * sinW * cosI, z: sinW * sinI };
   const Q = { x: -cosN * sinW - sinN * cosW * cosI, y: -sinN * sinW + cosN * cosW * cosI, z: cosW * sinI };
+  if (e > 1) {
+    const A = -a;
+    const extent = Math.max(extentAU, A * (e - 1) * 4);
+    const limit = Math.acosh((extent / A + 1) / e);
+    return {
+      closed: false,
+      maxSecondDerivative: 4 * limit * limit * Math.hypot(A * Math.cosh(limit), b * Math.sinh(limit)),
+      at(t) {
+        const H = (2 * t - 1) * limit;
+        const x = A * (e - Math.cosh(H)), y = b * Math.sinh(H);
+        return { x: P.x*x + Q.x*y, y: P.y*x + Q.y*y, z: P.z*x + Q.z*y };
+      },
+    };
+  }
   return {
     closed: true,
     maxSecondDerivative: 4 * Math.PI * Math.PI * a,

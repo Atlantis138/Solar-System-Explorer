@@ -15,6 +15,7 @@ import { useSimulation } from './hooks/useSimulation';
 import { loadSolarSystemData } from './utils/DataLoader';
 import { SYSTEM_DEFAULTS } from './data/default_settings';
 import { migrateSkySettings } from './core/skySettings';
+import { migrateSmallBodySettings, revealSmallBody } from './core/smallBodySettings';
 import { migrateCameraSettings } from './core/cameraSettings';
 
 const App: React.FC = () => {
@@ -109,7 +110,7 @@ const App: React.FC = () => {
     try {
       const saved = localStorage.getItem('user_settings');
       if (saved) {
-        const parsed = migrateCameraSettings(migrateSkySettings(JSON.parse(saved)));
+        const parsed = migrateSmallBodySettings(migrateCameraSettings(migrateSkySettings(JSON.parse(saved))));
         // Deep merge to ensure renderSettings structure is preserved if new keys are added to defaults later
         return {
           ...SYSTEM_DEFAULTS,
@@ -462,6 +463,19 @@ const App: React.FC = () => {
           visibilityMap={visibilityMap}
           onToggleVisibility={handleToggleVisibility}
           onDataReload={() => loadData(true)} 
+          onJumpToEncounter={body => {
+            if (body.elements.perihelionTimeJD === undefined) return;
+            sim.stopCalculation();
+            sim.setIsPlaying(false);
+            sim.setCurrentDate(new Date((body.elements.perihelionTimeJD - 2440587.5) * MILLISECONDS_PER_DAY));
+            sim.setHighlightedAlignment(null);
+            setVisibilityMap(prev => ({...prev,[body.id]:true}));
+            setSettings(prev => revealSmallBody(body,prev));
+            setSelectedPlanet(null);
+            setCameraFocusId(body.id);
+            setResetCameraFlag(flag => flag + 1);
+            setShowSettings(false);
+          }}
         />
       )}
 

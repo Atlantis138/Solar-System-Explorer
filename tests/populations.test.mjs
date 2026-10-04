@@ -13,13 +13,13 @@ const catalog=mergeCatalogSources(text),jupiter=catalog.planets.find(p=>p.id==='
 const date=new Date('2000-01-01T12:00:00Z');
 const reference={body:jupiter,position:{x:5.2,y:0,z:0}};
 
-test('population switches preserve legacy main-belt preferences and are independent of proportion/body categories',()=>{
+test('population switches preserve main-belt preferences, obey the umbrella and remain independent of proportion',()=>{
  assert.deepEqual(SMALL_BODY_POPULATIONS.filter(p=>populationVisible(p,SYSTEM_DEFAULTS)).map(p=>p.id),['main-asteroid-belt']);
  let settings=setPopulationVisible(SYSTEM_DEFAULTS,'main-asteroid-belt',false);
  settings=setPopulationVisible(settings,'jupiter-trojans',true);
  for(const trueScale of [false,true])for(const showAsteroidsComets of [false,true]) {
   const s={...settings,trueScale,showAsteroidsComets};
-  assert.deepEqual(SMALL_BODY_POPULATIONS.filter(p=>populationVisible(p,s)).map(p=>p.id),['jupiter-trojans']);
+  assert.deepEqual(SMALL_BODY_POPULATIONS.filter(p=>populationVisible(p,s)).map(p=>p.id),showAsteroidsComets?['jupiter-trojans']:[]);
  }
  assert.equal(SYSTEM_DEFAULTS.showAsteroidBelt,true,'switch helpers must not mutate defaults');
  assert.deepEqual(SMALL_BODY_POPULATIONS.filter(p=>populationVisible(p,JSON.parse(JSON.stringify(settings)))).map(p=>p.id),['jupiter-trojans']);

@@ -488,3 +488,48 @@ orbitReference: body
 epochJD: 2458484.73230324
 periodDays: 108614.60173409
 elements: 44.5512463422597 0.0409651575613421 2.45183112951153 158.976765215529 174.656449323195 315.900591109417
+
+# --- INTERSTELLAR VISITORS (existing physical categories) ---
+# Snapshot provenance and illustrative sizes: interstellar-sources.json
+
+[ASTEROID]
+id: oumuamua
+name: 奥陌陌
+englishName: 1I/ʻOumuamua
+interstellar: true
+color: #c7aa91
+radius: 2.5
+relativeRadius: 1.56961230576e-05
+epochJD: 2458080.5
+perihelionTimeJD: 2458006.00732
+elements: -1.272345 1.201134 122.7417 24.5969 241.8105 0
+description: 首颗确认的星际天体；未观测到明显彗发，因此不显示彗尾。 核半径为显示用估计，轨道为历元附近的两体近似。
+dataSource: https://github.com/Hotragn/HotEARTH/blob/main/public/data/small-bodies/objects.json
+
+[COMET]
+id: borisov
+name: 鲍里索夫彗星
+englishName: 2I/Borisov
+interstellar: true
+color: #a7dcd8
+radius: 2.5
+relativeRadius: 4.70883691728e-05
+epochJD: 2458853.5
+perihelionTimeJD: 2458826.05285
+elements: -0.8514923 3.356476 44.0526 308.1477 209.1237 0
+description: 来自太阳系外的彗星，沿开放双曲线一次性掠过太阳。 核半径为显示用估计，轨道为历元附近的两体近似。
+dataSource: https://github.com/Hotragn/HotEARTH/blob/main/public/data/small-bodies/objects.json
+
+[COMET]
+id: 3i-atlas
+name: 阿特拉斯彗星
+englishName: 3I/ATLAS
+interstellar: true
+color: #a7dcd8
+radius: 2.5
+relativeRadius: 0.000156961230576
+epochJD: 2460964.2444444443
+perihelionTimeJD: 2460977.982533267
+elements: -0.2639353538137568 6.139311027021769 175.1131066568337 322.1561096899903 128.0082001729325 0
+description: 来自太阳系外的彗星，沿开放双曲线一次性掠过太阳。 核半径为显示用估计，轨道为历元附近的两体近似。
+dataSource: https://github.com/tonylquintanilla/palomas_orrery/blob/4246a1a4df81fdae0430c4cfc4e553618803e999/data/osculating_cache.json

@@ -123,9 +123,12 @@ const PlanetInfoPanel: React.FC<PlanetInfoPanelProps> = ({
             <div className="text-gray-400">倾角 (i):</div><div className="text-right font-mono text-blue-300">{selectedPlanet.elements.i.toFixed(2)}°</div>
             <div className="col-span-2 h-px bg-gray-700 my-1"></div>
             <div className="text-gray-400">{isSatellite ? '近拱点 (Peri):' : '近日点 (Peri):'}</div><div className="text-right font-mono text-green-300">{isSatellite ? perihelion.toPrecision(5) : perihelion.toFixed(3)} AU</div>
-            <div className="text-gray-400">{isSatellite ? '远拱点 (Aphe):' : '远日点 (Aphe):'}</div><div className="text-right font-mono text-green-300">{isSatellite ? aphelion.toPrecision(5) : aphelion.toFixed(3)} AU</div>
+            <div className="text-gray-400">{isSatellite ? '远拱点 (Aphe):' : '远日点 (Aphe):'}</div><div className="text-right font-mono text-green-300">{e > 1 ? '无（开放轨道）' : `${isSatellite ? aphelion.toPrecision(5) : aphelion.toFixed(3)} AU`}</div>
           </div>
-          {selectedPlanet.id === 'pluto' && <p className="mt-3 text-xs leading-relaxed text-gray-500">卡戎采用近圆开普勒模型；高精度模式下，系统位置使用引擎星历，内部绕转仍为近似。</p>}
+          {selectedPlanet.elements.perihelionTimeJD !== undefined && <p className="mt-3 text-xs text-gray-400">
+            近日点：{new Date((selectedPlanet.elements.perihelionTimeJD-2440587.5)*86400000).toISOString().slice(0,10)} · {selectedPlanet.interstellar ? '星际来访' : '目录日期'}
+          </p>}
+          {selectedPlanet.id === 'pluto'  && <p className="mt-3 text-xs leading-relaxed text-gray-500">卡戎采用近圆开普勒模型；高精度模式下，系统位置使用引擎星历，内部绕转仍为近似。</p>}
         </div>
       )}
 

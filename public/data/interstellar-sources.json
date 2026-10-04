@@ -1,0 +1,106 @@
+{
+  "model": "Heliocentric J2000-ecliptic osculating two-body hyperbolae; not an N-body integration or a live Horizons ephemeris.",
+  "retrieved": "2026-10-04",
+  "sources": [
+    {
+      "url": "https://github.com/Hotragn/HotEARTH/blob/main/public/data/small-bodies/objects.json",
+      "git_blob_sha": "c260c76c451c684dddded6d16a88d66aa3be3fa3",
+      "upstream": "JPL SBDB",
+      "scope": "1I and 2I numeric records, rounded by the published snapshot"
+    },
+    {
+      "url": "https://github.com/tonylquintanilla/palomas_orrery/blob/4246a1a4df81fdae0430c4cfc4e553618803e999/data/osculating_cache.json",
+      "upstream": "JPL Horizons",
+      "scope": "3I/ATLAS osculating record; use TP belonging to these elements, not the different non-gravitational solution_TP"
+    }
+  ],
+  "time_note": "Source JD epochs are TDB. The existing simulator calendar approximates JD with UTC (about 69 seconds difference in 2017–2025); date shortcut displays the day, not ephemeris timing precision. Extrapolation far from the osculating epoch ignores perturbations and outgassing.",
+  "size_note": "Nucleus sizes are uncertain. Physical-mode marker radii are explicit illustrative assumptions: 1I 0.1 km, 2I 0.3 km, 3I 1 km, not measured exact sizes. Schematic radii and tail lengths/brightness are illustrative.",
+  "objects": [
+    {
+      "id": "oumuamua",
+      "name": "奥陌陌",
+      "englishName": "1I/ʻOumuamua",
+      "type": "asteroid",
+      "radius_km": 0.1,
+      "elements": {
+        "a": -1.272345,
+        "e": 1.201134,
+        "q": 0.255912,
+        "Q": null,
+        "i": 122.7417,
+        "om": 24.5969,
+        "w": 241.8105,
+        "period_yr": null,
+        "hyperbolic": true,
+        "moid_au": 0.095821,
+        "t_jup": null,
+        "epoch_jd": 2458080.5,
+        "ma": 51.15762,
+        "tp": 2458006.00732
+      }
+    },
+    {
+      "id": "borisov",
+      "name": "鲍里索夫彗星",
+      "englishName": "2I/Borisov",
+      "type": "comet",
+      "radius_km": 0.3,
+      "elements": {
+        "a": -0.8514923,
+        "e": 3.356476,
+        "q": 2.00652,
+        "Q": null,
+        "i": 44.0526,
+        "om": 308.1477,
+        "w": 209.1237,
+        "period_yr": null,
+        "hyperbolic": true,
+        "moid_au": 1.0929,
+        "t_jup": null,
+        "epoch_jd": 2458853.5,
+        "ma": 34.42947,
+        "tp": 2458826.05285
+      }
+    },
+    {
+      "id": "3i-atlas",
+      "name": "阿特拉斯彗星",
+      "englishName": "3I/ATLAS",
+      "type": "comet",
+      "radius_km": 1,
+      "elements": {
+        "a": -0.2639353538137568,
+        "e": 6.139311027021769,
+        "i": 175.1131066568337,
+        "om": 322.1561096899903,
+        "w": 128.0082001729325,
+        "epoch_jd": 2460964.2444444443,
+        "tp": 2460977.982533267
+      }
+    }
+  ],
+  "atlas_snapshot": {
+    "elements": {
+      "a": -0.2639353538137568,
+      "e": 6.139311027021769,
+      "i": 175.1131066568337,
+      "omega": 128.0082001729325,
+      "Omega": 322.1561096899903,
+      "epoch": "2025-10-15 17:52 osc.",
+      "TP": 2460977.982533267,
+      "MA": -99.85827116105455,
+      "TA": 338.0679782592827,
+      "solution_TP": 2460977.9952628477
+    },
+    "metadata": {
+      "fetched": "2026-06-10T06:20:59.048232",
+      "source": "JPL Horizons",
+      "solution_date": "2026-06-10",
+      "horizons_id": "C/2025 N1",
+      "display_name": "3I/ATLAS",
+      "refresh_interval_days": 1,
+      "center_body": "@sun"
+    }
+  }
+}

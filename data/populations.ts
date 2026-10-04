@@ -22,11 +22,13 @@ export const SMALL_BODY_POPULATIONS: SmallBodyPopulation[] = [
 ];
 
 export function populationVisible(population: SmallBodyPopulation, settings: AppSettings) {
+  if (!settings.showAsteroidsComets || settings.showSmallBodyPopulations === false) return false;
   // Keep the old preference and the settings shortcut as one source of truth.
   return population.id==='main-asteroid-belt' ? settings.showAsteroidBelt
     : settings.populationVisibility?.[population.id] ?? population.defaultVisible;
 }
 export function setPopulationVisible(settings:AppSettings,id:string,visible:boolean):AppSettings {
+  settings = visible ? {...settings,showAsteroidsComets:true,showSmallBodyPopulations:true} : settings;
   return id==='main-asteroid-belt' ? {...settings,showAsteroidBelt:visible}
     : {...settings,populationVisibility:{...settings.populationVisibility,[id]:visible}};
 }

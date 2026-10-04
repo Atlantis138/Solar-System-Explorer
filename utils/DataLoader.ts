@@ -206,7 +206,7 @@ const parseSingleBlock = (block: RawBlock, isCustomSource: boolean): PlanetData 
   if (block.typeTag === 'RING') (obj as any).isRing = true;
   if (block.typeTag === 'SATELLITE') obj.type = 'satellite';
 
-  const timing: { epochJD?: number; periodDays?: number } = {};
+  const timing: { epochJD?: number; periodDays?: number; perihelionTimeJD?: number } = {};
   for (const line of block.contentLines) {
     const parts = line.split(':');
     if (parts.length < 2) continue;
@@ -235,10 +235,13 @@ const parseSingleBlock = (block: RawBlock, isCustomSource: boolean): PlanetData 
         const allowed = key === 'orbitReference' ? ['body', 'system-barycenter', 'parent'] : ['body', 'system-barycenter'];
         if (!allowed.includes(val)) throw new Error(`Invalid ${key}: ${val}`);
         (obj as any)[key] = val;
-    } else if (key === 'epochJD' || key === 'periodDays') {
+    } else if (key === 'epochJD' || key === 'periodDays' || key === 'perihelionTimeJD') {
         const number = Number(val);
         if (!Number.isFinite(number) || number <= 0) throw new Error(`Invalid ${key}`);
         timing[key] = number;
+    } else if (key === 'interstellar') {
+        if (!['true', 'false'].includes(val)) throw new Error('interstellar 必须为 true 或 false');
+        obj.interstellar = val === 'true';
     } else if (key === 'color') {
         obj.color = val;
     } else if (key === 'id') {
@@ -271,8 +274,16 @@ const parseSingleBlock = (block: RawBlock, isCustomSource: boolean): PlanetData 
   if (obj.massRelativeToSun !== undefined && (!Number.isFinite(obj.massRelativeToSun) || obj.massRelativeToSun < 0)) throw new Error('Mass must be finite and non-negative');
   if (obj.elements) {
     Object.assign(obj.elements, timing);
-    if (!Object.values(obj.elements).every(Number.isFinite) || (obj.id !== 'sun' && (obj.elements.a <= 0 || obj.elements.e < 0 || obj.elements.e >= 1)))
-      throw new Error('Only finite elliptic orbital elements are supported (a > 0, 0 <= e < 1)');
+    const { a, e, periodDays, perihelionTimeJD, M } = obj.elements;
+    if (!Object.values(obj.elements).every(Number.isFinite) || (obj.id !== 'sun' &&
+      !((a > 0 && e >= 0 && e < 1) || (a < 0 && e > 1))))
+      throw new Error('椭圆需 a > 0 且 0 ≤ e < 1；双曲线需 a < 0 且 e > 1。暂不支持 e = 1 的抛物线。');
+    if (e > 1 && obj.parentId) throw new Error('开放轨道目前仅支持绕太阳的小天体，不能作为卫星轨道。');
+    if (e > 1 && periodDays !== undefined) throw new Error('双曲线没有公转周期，请移除 periodDays。');
+    if (perihelionTimeJD !== undefined && M !== 0) throw new Error('指定 perihelionTimeJD 时请将 M 设为 0，避免两套时间参数冲突。');
+    if (obj.interstellar && (!(e > 1) || !['comet','asteroid'].includes(obj.type ?? '')))
+      throw new Error('星际标记仅适用于双曲线上的彗星或小行星。');
+
   }
   if (obj.orbitReference === 'parent' && !obj.parentId) throw new Error('Parent-relative orbit requires parent');
   if (obj.parentId && obj.orbitReference && obj.orbitReference !== 'parent') throw new Error('Satellite elements must describe the orbit relative to its parent');

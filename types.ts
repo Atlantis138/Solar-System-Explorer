@@ -4,11 +4,12 @@ export interface OrbitalElements {
   N: number; // Longitude of ascending node (deg)
   i: number; // Inclination (deg)
   w: number; // Argument of perihelion (deg)
-  a: number; // Semi-major axis (AU)
+  a: number; // Signed semi-major axis (AU): positive for ellipse, negative for hyperbola
   e: number; // Eccentricity
   M: number; // Mean anomaly (deg)
   epochJD?: number; // Defaults to J2000
-  periodDays?: number; // Optional measured sidereal period
+  periodDays?: number; // Optional measured sidereal period (ellipses only)
+  perihelionTimeJD?: number; // Optional perihelion epoch; M must be 0 when supplied
 }
 
 export interface PlanetData {
@@ -34,6 +35,8 @@ export interface PlanetData {
 
   // Celestial Type
   type?: 'planet' | 'dwarf' | 'satellite' | 'comet' | 'asteroid';
+
+  interstellar?: boolean; // Origin flag; retains asteroid/comet category
 
   // Data Management Props (New Phase 1)
   visible: boolean;        // Toggle visibility in rendering
@@ -122,6 +125,12 @@ export interface AppSettings {
   showAsteroidBelt: boolean; 
   populationVisibility?: Record<string,boolean>;
   showAsteroidsComets: boolean; 
+  smallBodySettingsVersion?: number;
+  showComets?: boolean;
+  showAsteroids?: boolean;
+  showInterstellar?: boolean;
+  showCometTails?: boolean;
+  showSmallBodyPopulations?: boolean;
   showRegionLabels: boolean; // "Show Frontiers"
   useHighPrecision: boolean; 
   showEventHighlights: boolean; // Renamed from showAngularSpan: Controls cyan target circle

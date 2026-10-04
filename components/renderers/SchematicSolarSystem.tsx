@@ -7,6 +7,8 @@ import { calculatePlanetarySystem } from '../../utils/astronomy';
 import { createSceneView } from '../../core/sceneView';
 import { evaluateBodyVisibility, VISIBILITY_THRESHOLD } from '../../core/renderConfig';
 import { PlanetData, AppSettings, PinnedPlanet, Position } from '../../types';
+import { smallBodyVisible } from '../../core/smallBodySettings';
+import { CometTailLayer } from './SceneLayers';
 import { getOrbitCurve } from '../../core/orbitCache';
 import { bodyOrbitOpacity, orbitCategoryForBody } from '../../core/orbitCategories';
 import { OrbitPath } from '../../core/orbitDrawing';
@@ -50,8 +52,8 @@ const SchematicSolarSystem: React.FC<SchematicSolarSystemProps> = ({
   const visiblePlanets = useMemo(() => [
     ...planets,
     ...(settings.showDwarfPlanets ? dwarfs : []),
-    ...(settings.showAsteroidsComets ? asteroidsComets : []),
-  ], [settings.showDwarfPlanets, settings.showAsteroidsComets, planets, dwarfs, asteroidsComets]);
+    ...asteroidsComets.filter(body => smallBodyVisible(body,settings)),
+  ], [settings.showDwarfPlanets, settings.showAsteroidsComets, settings.showComets, settings.showAsteroids, settings.showInterstellar, planets, dwarfs, asteroidsComets]);
 
   const planetPositions = useMemo(() => {
     const positions: Record<string, ReturnType<typeof scene.project> & {
@@ -93,6 +95,7 @@ const SchematicSolarSystem: React.FC<SchematicSolarSystemProps> = ({
   return <>
     <OrbitLayer paths={paths} scene={scene} settings={settings} zoom={zoomTransform} />
     {hasVisiblePopulations(settings) && <BeltLayer scene={scene} settings={settings} zoom={zoomTransform} center={centerOfRotation} date={currentDate} referenceBody={planets.find(p=>p.id==='jupiter')} />}
+    {settings.showCometTails !== false && visiblePlanets.some(body => body.type === 'comet' && visibilityMap[body.id] !== false) && <CometTailLayer bodies={visiblePlanets} visibilityMap={visibilityMap} scene={scene} settings={settings} date={currentDate} />}
     <svg className="absolute inset-0 z-10 w-full h-full overflow-visible pointer-events-none">
       <g transform={zoomTransform.toString()}>
         {[SUN_DATA, ...visiblePlanets].map(body => ({ body, pos: planetPositions[body.id] }))
