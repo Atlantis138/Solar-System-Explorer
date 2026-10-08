@@ -16,6 +16,7 @@ import { DEFAULT_SUN_ANGULAR_RADIUS_DEG, calculateWorldPosition } from './utils/
 import { useSimulation } from './hooks/useSimulation';
 import { loadSolarSystemData } from './utils/DataLoader';
 import { SYSTEM_DEFAULTS } from './data/default_settings';
+import { migrateOrbitSettings } from './core/orbitCategories';
 import { migrateSkySettings } from './core/skySettings';
 import { migrateSmallBodySettings, revealSmallBody } from './core/smallBodySettings';
 import { migrateCameraSettings } from './core/cameraSettings';
@@ -118,7 +119,7 @@ const App: React.FC = () => {
     try {
       const saved = localStorage.getItem('user_settings');
       if (saved) {
-        const parsed = migrateSmallBodySettings(migrateCameraSettings(migrateSkySettings(JSON.parse(saved))));
+        const parsed = migrateOrbitSettings(migrateSmallBodySettings(migrateCameraSettings(migrateSkySettings(JSON.parse(saved)))));
         // Deep merge to ensure renderSettings structure is preserved if new keys are added to defaults later
         return {
           ...SYSTEM_DEFAULTS,
@@ -308,7 +309,7 @@ const App: React.FC = () => {
       case 'KeyJ':if(!settings.useHighPrecision)return;stop();setShowEvents(v=>!v);break;
       case 'KeyX':stop();setSettings(s=>({...s,trueScale:!s.trueScale}));break;
       case 'KeyL':setSettings(s=>nearbyActive?{...s,showNearbyStarLabels:s.showNearbyStarLabels===false}:{...s,realStarLabels:s.realStarLabels==='none'?'cn':'none'});break;
-      case 'KeyO':setSettings(s=>({...s,orbitOpacity:s.orbitOpacity>0?0:1}));break;
+      case 'KeyO':setSettings(s=>({...s,orbitOpacity:s.orbitOpacity>0?0:SYSTEM_DEFAULTS.orbitOpacity}));break;
       case 'KeyB':if(busy)return;sim.setTimeDirection(d=>d===1?-1:1);break;
       case 'Equal':case 'NumpadAdd':if(busy)return;sim.setSpeedMultiplier(v=>Math.min(64,v*2));break;
       case 'Minus':case 'NumpadSubtract':if(busy)return;sim.setSpeedMultiplier(v=>Math.max(.125,v*.5));break;

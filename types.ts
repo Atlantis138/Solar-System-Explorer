@@ -152,7 +152,8 @@ export interface AppSettings {
   cameraPerspective?: number; // 0 is orthographic, 1 is full perspective
   cameraTravelMultiplier?: number; // Multiplier applied after the automatic cruise rate.
   cameraTravelSpeed?: number; // Legacy preference, removed by migration; flight speed is automatic.
-  orbitOpacity: number; // 0.0 to 1.0
+  orbitOpacity: number; // 0–1 slider: 0.5 preserves reference brightness, 1 doubles it.
+  orbitSettingsVersion?: number;
   orbitCategoryOpacity?: Partial<Record<OrbitCategory,number>>;
   orbitPerspectiveIntensity: number; // 0 to 2, depth contrast; 1 = default
   trueScale: boolean;

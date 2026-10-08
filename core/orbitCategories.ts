@@ -25,7 +25,14 @@ export function categoryOrbitOpacity(settings:AppSettings,category:OrbitCategory
 /** The global slider and category slider multiply; zero always means off, even for a selected body. */
 export function bodyOrbitOpacity(body:PlanetData,settings:AppSettings):number {
   if (!smallBodyOrbitEnabled(body,settings)) return 0;
-  return Math.max(0,Math.min(1,settings.orbitOpacity))*categoryOrbitOpacity(settings,orbitCategoryForBody(body));
+  return 2*Math.max(0,Math.min(1,settings.orbitOpacity))*categoryOrbitOpacity(settings,orbitCategoryForBody(body));
+}
+/** Remap saved sliders once so their visible brightness stays unchanged. */
+export function migrateOrbitSettings(saved:Partial<AppSettings>):Partial<AppSettings> {
+  if ((saved.orbitSettingsVersion??0)>=1) return saved;
+  const value=saved.orbitOpacity;
+  return {...saved,orbitSettingsVersion:1,
+    orbitOpacity:typeof value==='number'&&Number.isFinite(value)?Math.max(0,Math.min(1,value))/2:.5};
 }
 export function categoryOrbitWidth(category:OrbitCategory='planet',emphasized=false):number {
   const width=ORBIT_CATEGORIES[category].width;

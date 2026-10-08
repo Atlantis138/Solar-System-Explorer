@@ -64,7 +64,7 @@ export function drawOrbitPaths(ctx: CanvasRenderingContext2D, paths: OrbitPath[]
       const style = orbitSegmentStyle(0, view, path.emphasized, undefined, path.local);
       ctx.strokeStyle = path.color;
       ctx.lineWidth = style.width * categoryOrbitWidth(path.category,path.emphasized) / view.zoom;
-      ctx.globalAlpha = style.alpha * path.opacity;
+      ctx.globalAlpha = Math.min(1,style.alpha * path.opacity);
       ctx.beginPath();
       let started = false;
       for (const p of path.points) {
@@ -138,7 +138,7 @@ export function drawOrbitPaths(ctx: CanvasRenderingContext2D, paths: OrbitPath[]
     ctx.lineTo(segment.b.x, segment.b.y);
     ctx.strokeStyle = segment.color;
     ctx.lineWidth = segment.width / view.zoom;
-    ctx.globalAlpha = segment.alpha;
+    ctx.globalAlpha = Math.min(1,segment.alpha);
     ctx.stroke();
   }
   ctx.restore();

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { importTs } from './helpers/import-ts.mjs';
-const { ORBIT_CATEGORIES,bodyOrbitOpacity,categoryOrbitOpacity,orbitCategoryForBody }=await importTs(new URL('../core/orbitCategories.ts',import.meta.url));
+const { ORBIT_CATEGORIES,bodyOrbitOpacity,categoryOrbitOpacity,orbitCategoryForBody,migrateOrbitSettings }=await importTs(new URL('../core/orbitCategories.ts',import.meta.url));
 const { drawOrbitPaths }=await importTs(new URL('../core/orbitDrawing.ts',import.meta.url));
 const { SYSTEM_DEFAULTS }=await importTs(new URL('../data/default_settings.ts',import.meta.url));
 const { mergeCatalogSources }=await importTs(new URL('../utils/DataLoader.ts',import.meta.url));
@@ -23,9 +23,9 @@ test('category opacity composes with the global setting, handles old preferences
  const legacy={...SYSTEM_DEFAULTS};delete legacy.orbitCategoryOpacity;
  assert.equal(categoryOrbitOpacity(legacy,'asteroid'),.3);
  const partial={...legacy,orbitCategoryOpacity:{asteroid:.2},orbitOpacity:.5};
- assert.equal(bodyOrbitOpacity(body('asteroid'),partial),.1);
- assert.equal(bodyOrbitOpacity(body('planet'),partial),.5);
- assert.equal(bodyOrbitOpacity(body('dwarf'),partial),.3);
+ assert.equal(bodyOrbitOpacity(body('asteroid'),partial),.2);
+ assert.equal(bodyOrbitOpacity(body('planet'),partial),1);
+ assert.equal(bodyOrbitOpacity(body('dwarf'),partial),.6);
  for(const category of Object.keys(ORBIT_CATEGORIES)) {
   const s={...SYSTEM_DEFAULTS,orbitCategoryOpacity:{[category]:0}};
   let strokes=0;const ctx={save(){},restore(){},setLineDash(){},beginPath(){},moveTo(){},lineTo(){},stroke(){strokes++}};
@@ -35,6 +35,25 @@ test('category opacity composes with the global setting, handles old preferences
  }
  assert.equal(orbitCategoryForBody({...body('asteroid'),parentId:'mars'}),'satellite');
  assert.equal(categoryOrbitOpacity({...legacy,orbitCategoryOpacity:{dwarf:NaN}},'dwarf'),.6);
+});
+test('50% retains reference brightness, 100% brightens tracks and saved preferences migrate once',()=>{
+ assert.equal(SYSTEM_DEFAULTS.orbitOpacity,.5);
+ for(const value of [0,.2,.5,1]) {
+  const upgraded=migrateOrbitSettings({orbitOpacity:value,orbitCategoryOpacity:{dwarf:.25}});
+  assert.equal(upgraded.orbitOpacity,value/2);
+  assert.equal(bodyOrbitOpacity(body('dwarf'),{...SYSTEM_DEFAULTS,...upgraded}),value*.25);
+  assert.deepEqual(migrateOrbitSettings(upgraded),upgraded);
+ }
+ for(const perspective of [false,true])for(const emphasized of [false,true]) {
+  const render=value=>{
+   const alphas=[];const ctx={save(){},restore(){},setLineDash(){},beginPath(){},moveTo(){},lineTo(){},stroke(){alphas.push(this.globalAlpha);}};
+   const point=x=>({x,y:0,depth:0,isVisible:true,opacity:1});
+   drawOrbitPaths(ctx,[{points:[point(0),point(1)],color:'#aaa',opacity:bodyOrbitOpacity(body('planet'),{...SYSTEM_DEFAULTS,orbitOpacity:value}),emphasized}],{zoom:1,perspective,tilt:90,intensity:1});
+   return alphas[0];
+  };
+  const reference=render(.5),bright=render(1);
+  assert.ok(bright>reference);assert.equal(bright,Math.min(1,reference*2));
+ }
 });
 test('Arrokoth name migration preserves local orbital edits and separately chosen user names',()=>{
  const official=readFileSync(new URL('../public/data/solar_system.txt',import.meta.url),'utf8');
