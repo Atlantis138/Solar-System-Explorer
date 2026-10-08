@@ -152,12 +152,11 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 <Slider label="投影方式" max={1} step={.05} value={perspectiveStrength(settings)} display={settings.enablePerspective ? `透视 ${Math.round(perspectiveStrength(settings)*100)}%` : '正交'}
                   onChange={value => set({ cameraPerspective: value, enablePerspective: value > 0 })} />
                 <div className="settings-row settings-note"><span>正交</span><span>透视</span></div>
-                <Slider label="视场角" min={30} max={100} step={1} value={cameraFov(settings)} display={`${cameraFov(settings)}°`}
-                  onChange={value => set({ cameraFov: value })} />
-                <Slider label="漫游速度" min={.1} max={3} step={.1} value={settings.cameraTravelSpeed ?? 1} display={`${(settings.cameraTravelSpeed ?? 1).toFixed(1)}×`}
-                  onChange={value => set({ cameraTravelSpeed: value })} />
+                {settings.enablePerspective && <Slider label="视场角" min={30} max={100} step={1} value={cameraFov(settings)} display={`${cameraFov(settings)}°`}
+                  onChange={value => set({ cameraFov: value })} />}
+                {!settings.enablePerspective && <p className="settings-note">正交投影没有镜头视场；选择透视后可调整。</p>}
                 {settings.enablePerspective && <Slider label="轨道远近对比" max={2} value={settings.orbitPerspectiveIntensity} onChange={value => set({ orbitPerspectiveIntensity: value })} />}
-                <p className="settings-note">按 H 查看操作说明。</p>
+                <p className="settings-note">左拖平移，右拖转向；漫游自动调速。按 H 查看操作。</p>
               </div>}
             </Section>
 

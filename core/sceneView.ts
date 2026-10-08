@@ -7,6 +7,7 @@ export interface CameraPoint { x: number; y: number; z: number }
 export interface SceneView {
   width: number; height: number; zoom: number; scale: number;
   focusDistanceAU: number; worldUnitsPerPixel: number; cameraPosition: Position;
+  referenceDistanceAU: number; // Physical distance to the navigation target, shared by orbit and flight.
   perspective: boolean; trueScale: boolean;
   project: (position: Position) => ProjectedPoint;
   toCamera: (position: Position) => CameraPoint;
@@ -39,7 +40,11 @@ export function createSceneView({ scale, settings, zoom, width, height, center, 
     y: center.y + px * right.y + py * down.y, z: center.z + px * right.z + py * down.z };
   const cameraPosition = { x: focus.x + back.x * distance,
     y: focus.y + back.y * distance, z: focus.z + back.z * distance };
-  const near = Math.max(1e-14, distance * (settings.trueScale ? 1e-6 : 1e-4));
+  // The projection plane still follows the renderer's zoom contract. Rendering
+  // context follows the physical observer instead of a zoom frozen before flight.
+  const referenceDistance = settings.enablePerspective
+    ? Math.max(1e-10,Math.hypot(cameraPosition.x-center.x,cameraPosition.y-center.y,cameraPosition.z-center.z)) : distance;
+  const near = Math.max(1e-14, referenceDistance * (settings.trueScale ? 1e-6 : 1e-4));
   const toCamera = (p: Position): CameraPoint => {
     const x = p.x - focus.x, y = p.y - focus.y, z = p.z - focus.z;
     return { x: x * right.x + y * right.y + z * right.z,
@@ -89,9 +94,9 @@ export function createSceneView({ scale, settings, zoom, width, height, center, 
     p.screenX! + radius >= -24 && p.screenY! + radius >= -24 && p.screenX! - radius <= width+24 && p.screenY! - radius <= height+24;
   // Range is relative to the visible neighbourhood, including lens-only mode.
   // Remote guide lines have no minimum alpha; physical bodies remain independent.
-  const range = Math.max(width,height) * units;
+  const range = Math.max(width,height) * (settings.enablePerspective ? referenceDistance / focalPixels : units);
   const rangeOpacity = (d:number) => 1 / (1 + Math.pow(d / Math.max(range * 1.8, 1e-14), 4));
-  return { width,height,zoom:k,scale,focusDistanceAU:distance,worldUnitsPerPixel:units,cameraPosition,
+  return { width,height,zoom:k,scale,focusDistanceAU:distance,referenceDistanceAU:referenceDistance,worldUnitsPerPixel:units,cameraPosition,
     perspective:settings.enablePerspective,trueScale:settings.trueScale,project,toCamera,clipSegment,projectedRadius,sphereVisible,rangeOpacity,
     projectedSystemOpacity: (p,r) => {
       if (!(r > 0)) return 0;

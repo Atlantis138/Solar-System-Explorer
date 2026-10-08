@@ -150,7 +150,7 @@ export interface AppSettings {
   nearbyShowGuides?: boolean;
   cameraFov?: number;
   cameraPerspective?: number; // 0 is orthographic, 1 is full perspective
-  cameraTravelSpeed?: number;
+  cameraTravelSpeed?: number; // Legacy preference, removed by migration; flight speed is automatic.
   orbitOpacity: number; // 0.0 to 1.0
   orbitCategoryOpacity?: Partial<Record<OrbitCategory,number>>;
   orbitPerspectiveIntensity: number; // 0 to 2, depth contrast; 1 = default

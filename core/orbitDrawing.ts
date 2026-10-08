@@ -98,7 +98,8 @@ export function drawOrbitPaths(ctx: CanvasRenderingContext2D, paths: OrbitPath[]
       const depth = (a.depth + b.depth) / 2;
       const distance = a.distanceAU !== undefined && b.distanceAU !== undefined
         ? (a.distanceAU + b.distanceAU) / 2 : undefined;
-      const relativeDepth = view.scene ? depth / (view.scene.focusDistanceAU * view.scene.scale) : (depth - center) / span;
+      const relativeDepth = view.scene && a.camera && b.camera
+        ? 1 - (a.camera.z+b.camera.z) / (2*view.scene.referenceDistanceAU) : (depth - center) / span;
       const contextDistance = a.contextDistanceAU !== undefined && b.contextDistanceAU !== undefined
         ? (a.contextDistanceAU + b.contextDistanceAU) / 2 : undefined;
       const style = orbitSegmentStyle(relativeDepth, view, path.emphasized, distance, path.local, contextDistance);

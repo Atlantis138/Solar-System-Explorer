@@ -81,7 +81,8 @@ export function drawAsteroidBelt(ctx: CanvasRenderingContext2D, width: number, h
       const fade=view.rangeOpacity(projected.contextDistanceAU??projected.distanceAU!);
       if(!projected.isVisible||fade<.015||(i*.61803398875)%1>fade) continue;
       const x=zoom.x+projected.x*zoom.k,y=zoom.y+projected.y*zoom.k;
-      const radius=Math.min(2,Math.max(.45,p.size*Math.sqrt(Math.max(0,projected.scaleFactor))));
+      const contextFactor=view.perspective&&projected.camera ? view.referenceDistanceAU/Math.max(1e-14,projected.camera.z) : 1;
+      const radius=Math.min(2,Math.max(.45,p.size*Math.sqrt(Math.max(0,contextFactor))));
       if(x< -radius||y< -radius||x>width+radius||y>height+radius) continue;
       ctx.moveTo(x+radius,y);ctx.arc(x,y,radius,0,TAU);
     }

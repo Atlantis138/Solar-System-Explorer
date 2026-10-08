@@ -55,9 +55,11 @@ test('transition follows physical screen span; old preferences default safely; t
   assert.equal(nearbyOpacity(SYSTEM_DEFAULTS, 1e-6, 1280, 800), 1);
   assert.equal(nearbyOpacity({ ...SYSTEM_DEFAULTS, trueScale: true }, 1e-6, 1280, 800), 0);
   assert.equal(nearbyOpacity({ ...SYSTEM_DEFAULTS, showNearbyStars: false }, 1e-6, 1280, 800), 0);
-  const mid = nearbyOpacity(SYSTEM_DEFAULTS, 1e-4, 1280, 800);
+  // Use a physical .1 ly half-span inside the current .03–.5 ly transition.
+  const midK = 800 / (2 * 65 * LIGHT_YEAR_AU * .1);
+  const mid = nearbyOpacity(SYSTEM_DEFAULTS, midK, 1280, 800);
   assert.ok(mid > 0 && mid < 1);
-  assert.equal(mid, nearbyOpacity(SYSTEM_DEFAULTS, 5e-5, 640, 400));
+  assert.equal(mid, nearbyOpacity(SYSTEM_DEFAULTS, midK / 2, 640, 400));
   const limits = solarZoomExtent(false, true);
   assert.ok(limits[0] < nearbyFitZoom(100, 390, 700, true));
   assert.deepEqual(solarZoomExtent(false, false), [1e-4, 100]);

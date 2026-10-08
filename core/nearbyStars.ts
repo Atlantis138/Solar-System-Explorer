@@ -14,11 +14,14 @@ export const nearbyPositionAU = (star: NearbyStar): Position => ({
   x: star.position.x * LIGHT_YEAR_AU, y: star.position.y * LIGHT_YEAR_AU, z: star.position.z * LIGHT_YEAR_AU,
 });
 
+export const solarDistanceBlend=(distanceAU:number)=>
+  smoothStep(Math.log(.03),Math.log(.5),Math.log(Math.max(1e-12,distanceAU/LIGHT_YEAR_AU)));
+
 /** Transition uses the physical span of the short axis, independent of viewport size. */
-export function nearbyOpacity(settings: AppSettings, k: number, width: number, height: number, observerDistanceAU = 0) {
+export function nearbyOpacity(settings: AppSettings, k: number, width: number, height: number, observerDistanceAU = 0, roaming = false) {
   if (settings.trueScale || settings.showNearbyStars === false || !(k > 0) || Math.min(width, height) <= 0) return 0;
-  const radiusLy = Math.min(width, height) / (2 * AU_SCALE_SCHEMATIC * k * LIGHT_YEAR_AU);
-  return smoothStep(Math.log(.03), Math.log(.5), Math.log(Math.max(radiusLy, observerDistanceAU / LIGHT_YEAR_AU)));
+  const radiusLy = roaming ? 0 : Math.min(width, height) / (2 * AU_SCALE_SCHEMATIC * k * LIGHT_YEAR_AU);
+  return solarDistanceBlend(Math.max(radiusLy*LIGHT_YEAR_AU,observerDistanceAU));
 }
 
 export function nearbyFitZoom(radiusLy: number, width: number, height: number, perspective: boolean, fov = 72) {

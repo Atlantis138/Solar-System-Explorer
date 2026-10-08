@@ -2,6 +2,7 @@ import { KUIPER_BELT_AU, HELIOPAUSE_AU } from '../data/constants';
 import { sceneLabelStyle, SCENE_FONT_FAMILY } from './sceneLabels';
 import { smoothStep } from './math';
 import { sampleOrbitCurve } from './orbitGeometry';
+import type { ProjectedPoint } from './projection';
 import type { SceneView } from './sceneView';
 
 const REGIONS = [
@@ -22,6 +23,7 @@ export function regionPerspectiveStyle(scaleFactor:number, perspective:boolean, 
  * and brighter baseline. CSS units make the result independent of screen DPR. */
 export function drawRegionBoundaries(ctx: CanvasRenderingContext2D, scene: SceneView) {
   const k=scene.zoom;
+  const contextFactor=(point:ProjectedPoint)=>scene.perspective&&point.camera ? scene.referenceDistanceAU/Math.max(1e-14,point.camera.z) : 1;
   ctx.save(); ctx.setLineDash([]); ctx.lineCap='butt';
   for (const region of REGIONS) {
     const apparentRadius=scene.projectedRadius(region.radius,scene.project({x:0,y:0,z:0}));
@@ -45,7 +47,7 @@ export function drawRegionBoundaries(ctx: CanvasRenderingContext2D, scene: Scene
         const [a,b]=pair;
         if(!previous||Math.hypot(previous.x-a.x,previous.y-a.y)*k>.01) ctx.moveTo(a.x,a.y);
         ctx.lineTo(b.x,b.y);previous=b;
-        sum+=(a.scaleFactor+b.scaleFactor)/2;count++;
+        sum+=(contextFactor(a)+contextFactor(b))/2;count++;
       }
       if(!count) continue;
       const style=regionPerspectiveStyle(sum/count,scene.perspective,scene.trueScale?2:region.width);
@@ -63,8 +65,9 @@ export function drawRegionBoundaries(ctx: CanvasRenderingContext2D, scene: Scene
     const letterAt=(angle:number)=>{
       const radius=region.radius*1.08;
       const point=scene.project({x:radius*Math.cos(angle),y:radius*Math.sin(angle),z:0});
-      const style=regionPerspectiveStyle(point.scaleFactor,scene.perspective,1);
-      const labelStyle=sceneLabelStyle('region',apparentRadius*(scene.perspective?Math.max(0,point.scaleFactor):1));
+      const factor=contextFactor(point);
+      const style=regionPerspectiveStyle(factor,scene.perspective,1);
+      const labelStyle=sceneLabelStyle('region',apparentRadius*(scene.perspective?Math.max(0,factor):1));
       return {point,style,font:labelStyle.fontSize,labelOpacity:labelStyle.opacity};
     };
     const separated=(letters:ReturnType<typeof letterAt>[])=>letters.every((a,i)=>letters.slice(i+1).every(b=>{

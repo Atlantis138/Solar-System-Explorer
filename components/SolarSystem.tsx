@@ -6,13 +6,16 @@ import { AppSettings, PlanetData, PinnedPlanet, Position, RealStar, Constellatio
 import StarField from './StarField';
 import SchematicSolarSystem from './renderers/SchematicSolarSystem';
 import TrueScaleSolarSystem from './renderers/TrueScaleSolarSystem';
-import { calculateWorldPosition } from '../utils/astronomy';
+import { calculateWorldPosition, calculatePlanetarySystem } from '../utils/astronomy';
 import { AU_SCALE_SCHEMATIC, AU_SCALE_TRUE, SUN_DATA } from '../data/constants';
 import NearbyStars from './NearbyStars';
 import { VirtualJoystick, NavigationInput } from './VirtualJoystick';
 import { createSceneView } from '../core/sceneView';
 import { cameraFocalPixels, cameraFov, perspectiveStrength, moveObserver, rotateCameraLocal, solarResetPose, cameraBasis } from '../core/cameraOptics';
-import { nearbyOpacity, nearbyRadius, nearbyFitZoom, nearbyPositionAU, solarZoomExtent, LIGHT_YEAR_AU } from '../core/nearbyStars';
+import { nearbyOpacity, nearbyPositionAU, solarZoomExtent, LIGHT_YEAR_AU } from '../core/nearbyStars';
+import { dragDegreesPerPixel, framedOrbitPose, orbitGestureTransform, pinchFov, automaticTravelSpeed } from '../core/cameraNavigation';
+import { useSceneGestures } from '../hooks/useSceneGestures';
+import { setCameraMovement } from '../core/cameraSettings';
 
 const ORIGIN: Position = { x: 0, y: 0, z: 0 };
 
@@ -73,17 +76,33 @@ const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(({
   const [freeOrbitCenter,setFreeOrbitCenter] = useState<Position|null>(null);
   const [starTarget, setStarTarget] = useState<Position>(ORIGIN);
   const [cameraEye, setCameraEye] = useState<Position | null>(null);
+  const [roamTarget,setRoamTarget] = useState<{id:string|null;center:Position}|null>(null);
+  const restoredFocus = useRef<string|null>(null);
+  // Handle Camera Focus Target Tracking (Center of Rotation)
+  const centerOfRotation = useMemo<Position>(() => {
+    const targetId=cameraFocusId??(cameraEye?roamTarget?.id:null);
+    if(cameraEye&&roamTarget&&!targetId)return roamTarget.center;
+    if (freeOrbitCenter && !targetId) return freeOrbitCenter;
+    if (!targetId) return starTarget;
+    const focusPos = calculateWorldPosition(targetId, [...planets, ...dwarfs, ...asteroidsComets], currentDate, settings.useHighPrecision);
+
+    return focusPos.x === 0 && focusPos.y === 0 && focusPos.z === 0 ? ORIGIN : focusPos;
+  }, [starTarget, freeOrbitCenter, cameraFocusId, cameraEye, roamTarget, currentDate, settings.trueScale, settings.useHighPrecision, planets, dwarfs, asteroidsComets]);
+
   const transitionScene=createSceneView({scale:settings.trueScale?AU_SCALE_TRUE:AU_SCALE_SCHEMATIC,
-    settings,zoom:zoomTransform,width:dimensions.w,height:dimensions.h,center:freeOrbitCenter??starTarget,observer:cameraEye});
+    settings,zoom:zoomTransform,width:dimensions.w,height:dimensions.h,center:centerOfRotation,observer:cameraEye});
   const observerDistance=Math.hypot(transitionScene.cameraPosition.x,transitionScene.cameraPosition.y,transitionScene.cameraPosition.z);
   const neighborAlpha = settings.trueScale || settings.showNearbyStars === false ? 0
-    : nearbyOpacity(settings, zoomTransform.k, dimensions.w, dimensions.h,observerDistance);
+    : nearbyOpacity(settings, zoomTransform.k, dimensions.w, dimensions.h,observerDistance,!!cameraEye);
   const navigationRef = useRef({settings, dimensions, cameraEye, zoom: zoomTransform});
   navigationRef.current = {settings, dimensions, cameraEye, zoom: zoomTransform};
   useEffect(() => onNearbyActiveChange(neighborAlpha > .5), [neighborAlpha > .5]);
-  useEffect(() => { setCameraEye(null); setStellarLocked(false); setStarTarget(ORIGIN);   setFreeOrbitCenter(null); }, [settings.trueScale, settings.showNearbyStars, resetCameraFlag]);
-  useEffect(() => { if(cameraFocusId){setCameraEye(null);setStellarLocked(false);setStarTarget(ORIGIN);setFreeOrbitCenter(null);} },[cameraFocusId]);
-  useEffect(() => { if (!settings.showCameraControl) setCameraEye(null); }, [settings.showCameraControl]);
+  useEffect(() => { setCameraEye(null);setRoamTarget(null); setStellarLocked(false); setStarTarget(ORIGIN);   setFreeOrbitCenter(null); }, [resetCameraFlag]);
+  useEffect(() => { if(cameraFocusId){setRoamTarget(null);setCameraEye(null);setStellarLocked(false);setStarTarget(ORIGIN);setFreeOrbitCenter(null);} },[cameraFocusId]);
+  useEffect(() => {
+    if (settings.showCameraControl || !navigationRef.current.cameraEye) return;
+    returnToOrbit();
+  }, [settings.showCameraControl]);
 
   // Measure the actual scene, including iPad Split View and restored pages.
   useEffect(() => {
@@ -103,24 +122,11 @@ const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(({
     if (!containerRef.current) return;
     const container = d3.select(containerRef.current);
     
+    // D3 owns programmatic transitions only. Scene gestures have a single owner
+    // and cannot mutate both a roam observer and the orbit transform.
     const zoom = d3.zoom<HTMLDivElement, unknown>()
-      .filter(event => !event.target?.closest?.('[data-scene-ui],button,input,select,textarea,a')
-        && !event.altKey && (!event.ctrlKey || event.type === 'wheel') && !event.button)
-      .clickDistance(4)
-      .on('start', event => {if(event.sourceEvent)container.interrupt();})
+      .filter(() => false)
       .on('zoom', (event) => {
-        const current = navigationRef.current;
-        if (event.sourceEvent && current.cameraEye) {
-          const scale = current.settings.trueScale ? AU_SCALE_TRUE : AU_SCALE_SCHEMATIC;
-          const units = 1 / (scale * event.transform.k);
-          const oldUnits = 1 / (scale * current.zoom.k);
-          const distanceChange = cameraFocalPixels(current.dimensions.w, current.dimensions.h, cameraFov(current.settings))
-            / (perspectiveStrength(current.settings) || 1) * (units-oldUnits);
-          const next = moveObserver(current.cameraEye, current.settings.viewTilt, current.settings.viewYaw,
-            (current.zoom.x-event.transform.x)*units, (current.zoom.y-event.transform.y)*units, distanceChange, current.settings.viewRoll ?? 0);
-          navigationRef.current.cameraEye = next;
-          setCameraEye(next);
-        }
         navigationRef.current.zoom = event.transform;
         setZoomTransform(event.transform);
       });
@@ -130,6 +136,7 @@ const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(({
     
     // Synchronize initial state
     container.call(zoom.transform, zoomTransform);
+    return () => { container.interrupt().on('.zoom', null); zoomBehaviorRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -139,6 +146,7 @@ const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(({
       const extent = solarZoomExtent(settings.trueScale, settings.showNearbyStars !== false);
       zoomBehaviorRef.current.scaleExtent(extent);
       if (!settings.trueScale && settings.showNearbyStars === false && (zoomTransform.k < extent[0] || stellarLocked)) {
+        navigationRef.current.cameraEye=null;setCameraEye(null);setRoamTarget(null);setStellarLocked(false);setStarTarget(ORIGIN);setFreeOrbitCenter(null);
         d3.select(containerRef.current).interrupt().call(zoomBehaviorRef.current.transform,
           d3.zoomIdentity.translate(dimensions.w / 2, dimensions.h / 2).scale(.8));
       }
@@ -197,6 +205,9 @@ const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(({
             ? d3.zoomIdentity.translate(dimensions.w / 2, dimensions.h / 2)
                 .scale(settings.trueScale ? .8 * AU_SCALE_SCHEMATIC / AU_SCALE_TRUE : .8)
             : d3.zoomIdentity.translate(newTransform.x, newTransform.y).scale(newK);
+          if (newK < min || newK > max) {
+            navigationRef.current.cameraEye=null;setCameraEye(null);setRoamTarget(null);setStellarLocked(false);setStarTarget(ORIGIN);setFreeOrbitCenter(null);
+          }
           shouldUpdate = true;
           prevTrueScale.current = settings.trueScale;
       }
@@ -228,10 +239,11 @@ const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(({
       .ease(d3.easeCubicOut)
       .call(zoomBehaviorRef.current.transform, newTransform);
       
-  }, [resetCameraFlag, settings.trueScale, dimensions]); 
+  }, [resetCameraFlag]);
 
   // Explicit system view fits the local orbits once, then follows their barycenter.
   useEffect(() => {
+    if(restoredFocus.current===cameraFocusId&&cameraFocusId)return;
     if (!cameraFocusId?.startsWith('barycenter:') || !settings.trueScale || !containerRef.current || !zoomBehaviorRef.current) return;
     const roots = [...planets, ...dwarfs, ...asteroidsComets];
     const parent = [SUN_DATA, ...roots, ...roots.flatMap(p => p.satellites ?? [])].find(p => p.id === cameraFocusId.slice(11));
@@ -245,24 +257,17 @@ const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(({
       d3.zoomIdentity.translate(dimensions.w / 2, dimensions.h / 2).scale(scale));
   }, [cameraFocusId, settings.trueScale]);
 
-  // Handle Camera Focus Target Tracking (Center of Rotation)
-  const centerOfRotation = useMemo<Position>(() => {
-    if (freeOrbitCenter && !cameraFocusId) return freeOrbitCenter;
-    if (!cameraFocusId) return starTarget;
-    const focusPos = calculateWorldPosition(cameraFocusId ?? 'sun', [...planets, ...dwarfs, ...asteroidsComets], currentDate, settings.useHighPrecision);
-
-    return focusPos.x === 0 && focusPos.y === 0 && focusPos.z === 0 ? ORIGIN : focusPos;
-  }, [neighborAlpha > 0, starTarget, freeOrbitCenter, cameraFocusId, currentDate, settings.trueScale, settings.useHighPrecision, planets, dwarfs, asteroidsComets]);
 
   useEffect(() => {
 
+    if(restoredFocus.current===cameraFocusId&&cameraFocusId){restoredFocus.current=null;return;}
     if (cameraFocusId && containerRef.current && zoomBehaviorRef.current) {
         const { w, h } = dimensions;
         const currentK = d3.zoomTransform(containerRef.current).k;
         const newTransform = d3.zoomIdentity.translate(w / 2, h / 2).scale(currentK);
         d3.select(containerRef.current).call(zoomBehaviorRef.current.transform, newTransform);
     }
-  }, [cameraFocusId, dimensions]);
+  }, [cameraFocusId]);
 
   const moveTo = (k: number, x = dimensions.w / 2, y = dimensions.h / 2) => {
     if (!containerRef.current || !zoomBehaviorRef.current) return;
@@ -280,7 +285,7 @@ const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(({
     const focal=cameraFocalPixels(dimensions.w,dimensions.h,cameraFov(current.settings))/(perspectiveStrength(current.settings)||1);
     const targetK=stellar?focal/(scale*15*LIGHT_YEAR_AU):.8*(current.settings.trueScale?AU_SCALE_SCHEMATIC/AU_SCALE_TRUE:1);
     const targetDistance=focal/(scale*targetK);
-    onPlanetSelect(null);onCameraFocusChange(null);setStellarLocked(false);
+    onPlanetSelect(null);onCameraFocusChange(null);setRoamTarget(null);setStellarLocked(false);
     const update=(t:number)=>{
       const nextSettings={...navigationRef.current.settings,showCameraControl:true,enableSpaceView:true,
         viewTilt:current.settings.viewTilt+(90-current.settings.viewTilt)*t,
@@ -307,57 +312,145 @@ const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(({
   const showNeighbors=()=>goOverview(true);
   const returnToSolarSystem=()=>goOverview(false);
   const locateStar = (star: NearbyStar, visit = false) => {
+    window.dispatchEvent(new Event('navigation-stop'));
     onCameraFocusChange(null); setStellarLocked(true);
     const p = nearbyPositionAU(star); setStarTarget(p);setFreeOrbitCenter(p);
     const distance = (visit ? .7 : 3) * LIGHT_YEAR_AU;
     const focal = cameraFocalPixels(dimensions.w, dimensions.h, cameraFov(settings));
     const k = focal / (AU_SCALE_SCHEMATIC * distance);
     if (visit) {
+      setRoamTarget({id:null,center:p});
       setCameraEye(moveObserver(p, settings.viewTilt, settings.viewYaw, 0, 0, distance, settings.viewRoll ?? 0));
       onSettingsChange({...settings,showCameraControl:true,enableSpaceView:true,enablePerspective:true,cameraPerspective:1});
-    } else setCameraEye(null);
+    } else {setCameraEye(null);setRoamTarget(null);}
     moveTo(k);
   };
   const cameraScene = useMemo(() => createSceneView({scale: settings.trueScale ? AU_SCALE_TRUE : AU_SCALE_SCHEMATIC,
     settings, zoom:zoomTransform, width:dimensions.w, height:dimensions.h, center:centerOfRotation, observer:cameraEye}),
     [settings.viewTilt,settings.viewYaw,settings.viewRoll,settings.enablePerspective,settings.cameraPerspective,settings.cameraFov,settings.trueScale,zoomTransform,dimensions,centerOfRotation,cameraEye]);
-  const travelStep = cameraScene.worldUnitsPerPixel * Math.min(dimensions.w,dimensions.h) * .45 * (settings.cameraTravelSpeed ?? 1);
+  // Reuse ephemeris caches; no extra astronomy evaluation on each motion tick.
+  const navigationAnchors=useMemo(()=>{
+    if(!settings.showCameraControl&&!cameraEye)return [];
+    const points:Position[]=[];
+    for(const body of [...planets,...(settings.showDwarfPlanets?dwarfs:[])]) {
+      if(visibilityMap[body.id]===false)continue;
+      const system=calculatePlanetarySystem(body,currentDate,settings.useHighPrecision);
+      points.push(system.parentPosition);
+      if(settings.trueScale)for(const [id,p] of system.satellitePositions)if(visibilityMap[id]!==false)points.push(p);
+    }
+    return points;
+  },[planets,dwarfs,currentDate,settings.useHighPrecision,settings.trueScale,settings.showDwarfPlanets,visibilityMap,settings.showCameraControl,!!cameraEye]);
+  const flightRate=(eye:Position)=>automaticTravelSpeed(eye,[...navigationAnchors,centerOfRotation]);
+  const syncTransform = (transform: d3.ZoomTransform) => {
+    if (!containerRef.current || !zoomBehaviorRef.current) return;
+    d3.select(containerRef.current).interrupt().call(zoomBehaviorRef.current.transform, transform);
+  };
   const applyNavigation = (input:NavigationInput) => {
     const current=navigationRef.current;
+    if (!current.settings.showCameraControl&&(input.right||input.down||input.forward)) return;
     if(containerRef.current)d3.select(containerRef.current).interrupt();
-    const baseSettings=current.settings.showCameraControl?current.settings:{...current.settings,showCameraControl:true,enableSpaceView:true,enablePerspective:true,cameraPerspective:1};
+    const baseSettings=current.settings;
+    const wasRoaming=!!current.cameraEye;
     const moving=!!(input.right||input.down||input.forward);
     const baseScene=createSceneView({scale:baseSettings.trueScale?AU_SCALE_TRUE:AU_SCALE_SCHEMATIC,settings:baseSettings,
       zoom:current.zoom,width:current.dimensions.w,height:current.dimensions.h,center:centerOfRotation,observer:current.cameraEye});
-    const nextSettings={...baseSettings,...rotateCameraLocal(baseSettings.viewTilt,baseSettings.viewYaw,baseSettings.viewRoll??0,input.yaw,input.pitch,input.roll)};
+    const nextSettings=input.yaw||input.pitch||input.roll
+      ? {...baseSettings,...rotateCameraLocal(baseSettings.viewTilt,baseSettings.viewYaw,baseSettings.viewRoll??0,input.yaw,input.pitch,input.roll)} : baseSettings;
     if(moving){
-      const step=baseScene.worldUnitsPerPixel*Math.min(current.dimensions.w,current.dimensions.h)*.45*(baseSettings.cameraTravelSpeed??1);
+      if (!current.cameraEye) {
+        setRoamTarget({id:cameraFocusId,center:centerOfRotation});
+      }
       const eye=current.cameraEye??baseScene.cameraPosition;
+      const step=flightRate(eye);
       const next=moveObserver(eye,nextSettings.viewTilt,nextSettings.viewYaw,input.right*step,input.down*step,-input.forward*step,nextSettings.viewRoll);
       navigationRef.current.cameraEye=next;setCameraEye(next);
-      if(!current.cameraEye){onCameraFocusChange(null);if(neighborAlpha>0)setStellarLocked(true);}
+      if(!wasRoaming){onCameraFocusChange(null);syncTransform(d3.zoomIdentity.translate(current.dimensions.w/2,current.dimensions.h/2).scale(current.zoom.k));if(neighborAlpha>0)setStellarLocked(true);}
     }
-    navigationRef.current.settings=nextSettings;onSettingsChange(nextSettings);
+    if(nextSettings!==baseSettings){navigationRef.current.settings=nextSettings;onSettingsChange(nextSettings);}
   };
-  const lookDrag=useRef<{id:number;x:number;y:number;distance:number}|null>(null);
-  const suppressSceneClick=useRef(false);
-  const touchAngle=useRef<number|null>(null);
-  useEffect(()=>{const stop=()=>{lookDrag.current=null;touchAngle.current=null;};window.addEventListener('blur',stop);document.addEventListener('visibilitychange',stop);return()=>{window.removeEventListener('blur',stop);document.removeEventListener('visibilitychange',stop);};},[]);
+  const returnToOrbit = () => {
+    window.dispatchEvent(new Event('navigation-stop'));
+    const current=navigationRef.current;
+    if(!current.cameraEye)return;
+    const id=roamTarget?.id?.startsWith('barycenter:')&&!current.settings.trueScale
+      ? roamTarget.id.slice(11) : roamTarget?.id??null;
+    const target=id ? calculateWorldPosition(id,[...planets,...dwarfs,...asteroidsComets],currentDate,current.settings.useHighPrecision)
+      : roamTarget?.center??centerOfRotation;
+    const pose=framedOrbitPose(current.cameraEye,target,current.settings,
+      current.settings.trueScale?AU_SCALE_TRUE:AU_SCALE_SCHEMATIC,current.dimensions.w,current.dimensions.h);
+    const nextSettings={...current.settings,viewTilt:pose.viewTilt,viewYaw:pose.viewYaw,viewRoll:pose.viewRoll};
+    // Restore the actual target and measured depth while retaining offset framing.
+    // A restored system target must not trigger the initial automatic fit again.
+    restoredFocus.current=id;
+    onCameraFocusChange(id);setFreeOrbitCenter(id?null:target);setStarTarget(id?ORIGIN:target);
+    setCameraEye(null);setRoamTarget(null);
+    navigationRef.current={...current,settings:nextSettings,cameraEye:null};
+    onSettingsChange(nextSettings);
+    syncTransform(d3.zoomIdentity.translate(pose.x,pose.y).scale(pose.zoom));
+  };
   const toggleRoaming = () => {
-    if (neighborAlpha > 0) setStellarLocked(true);
-    if (cameraEye) {
-      // Keep the same camera position when returning to orbit around a local point.
-      const focus=moveObserver(cameraEye,settings.viewTilt,settings.viewYaw,0,0,-cameraScene.focusDistanceAU,settings.viewRoll??0);
-      if (neighborAlpha > 0) {setStarTarget(focus);setFreeOrbitCenter(focus);}
-      else {setFreeOrbitCenter(focus);onCameraFocusChange(null);}
-      setCameraEye(null);
-    } else {
-      setCameraEye(cameraScene.cameraPosition);
-      onSettingsChange({...settings,showCameraControl:true,enableSpaceView:true,enablePerspective:true,cameraPerspective:1});
-    }
-    if(containerRef.current&&zoomBehaviorRef.current) d3.select(containerRef.current).interrupt().call(zoomBehaviorRef.current.transform,
-      d3.zoomIdentity.translate(dimensions.w/2,dimensions.h/2).scale(zoomTransform.k));
+    window.dispatchEvent(new Event('navigation-stop'));
+    const current=navigationRef.current;
+    if(current.cameraEye){returnToOrbit();return;}
+    const baseSettings=current.settings.showCameraControl?current.settings:setCameraMovement(current.settings,true);
+    const scene=createSceneView({scale:baseSettings.trueScale?AU_SCALE_TRUE:AU_SCALE_SCHEMATIC,settings:baseSettings,
+      zoom:current.zoom,width:current.dimensions.w,height:current.dimensions.h,center:centerOfRotation});
+    if(neighborAlpha>0)setStellarLocked(true);
+    setRoamTarget({id:cameraFocusId,center:centerOfRotation});
+    navigationRef.current={...current,settings:baseSettings,cameraEye:scene.cameraPosition};
+    setCameraEye(scene.cameraPosition);onCameraFocusChange(null);onSettingsChange(baseSettings);
+    syncTransform(d3.zoomIdentity.translate(current.dimensions.w/2,current.dimensions.h/2).scale(current.zoom.k));
   };
+  const setLens = (fov:number) => {
+    if(!navigationRef.current.settings.enablePerspective)return;
+    const next={...navigationRef.current.settings,cameraFov:fov};
+    navigationRef.current.settings=next;onSettingsChange(next);
+  };
+  const orbitZoom = (ratio:number) => {
+    const current=navigationRef.current,extent=solarZoomExtent(current.settings.trueScale,current.settings.showNearbyStars!==false);
+    // Keep the target framing offset while the whole orbit radius changes.
+    const transform=orbitGestureTransform(current.zoom,current.dimensions.w,current.dimensions.h,ratio,0,0,extent);
+    syncTransform(d3.zoomIdentity.translate(transform.x,transform.y).scale(transform.k));
+  };
+  const panScene = (dx:number,dy:number) => {
+    const current=navigationRef.current;
+    if(current.cameraEye){
+      const scene=createSceneView({scale:current.settings.trueScale?AU_SCALE_TRUE:AU_SCALE_SCHEMATIC,settings:current.settings,
+        zoom:current.zoom,width:current.dimensions.w,height:current.dimensions.h,center:centerOfRotation,observer:current.cameraEye});
+      const units=current.settings.enablePerspective ? scene.referenceDistanceAU/(cameraFocalPixels(current.dimensions.w,current.dimensions.h,cameraFov(current.settings))/(perspectiveStrength(current.settings)||1)) : scene.worldUnitsPerPixel;
+      const next=moveObserver(current.cameraEye,current.settings.viewTilt,current.settings.viewYaw,-dx*units,-dy*units,0,current.settings.viewRoll??0);
+      navigationRef.current.cameraEye=next;setCameraEye(next);
+    }else syncTransform(d3.zoomIdentity.translate(current.zoom.x+dx,current.zoom.y+dy).scale(current.zoom.k));
+  };
+  const pinchStart=useRef({zoom:zoomTransform,fov:cameraFov(settings)});
+  const gestures=useSceneGestures(containerRef,{
+    shortAxis:Math.min(dimensions.w,dimensions.h),
+    interrupt:()=>{if(containerRef.current)d3.select(containerRef.current).interrupt();},
+    rotate:(dx,dy)=>{
+      const current=navigationRef.current;
+      const sensitivity=dragDegreesPerPixel(current.settings,Math.min(current.dimensions.w,current.dimensions.h));
+      const next={...current.settings,...rotateCameraLocal(current.settings.viewTilt,current.settings.viewYaw,current.settings.viewRoll??0,dx*sensitivity,dy*sensitivity)};
+      navigationRef.current.settings=next;onSettingsChange(next);
+    },
+    pan:panScene,
+    beginPinch:()=>{pinchStart.current={zoom:navigationRef.current.zoom,fov:cameraFov(navigationRef.current.settings)};},
+    pinch:(ratio,dx,dy)=>{
+      const current=navigationRef.current;
+      if(current.cameraEye)setLens(pinchFov(pinchStart.current.fov,ratio));
+      else {
+        const transform=orbitGestureTransform(pinchStart.current.zoom,current.dimensions.w,current.dimensions.h,ratio,dx,dy,solarZoomExtent(current.settings.trueScale,current.settings.showNearbyStars!==false));
+        syncTransform(d3.zoomIdentity.translate(transform.x,transform.y).scale(transform.k));
+      }
+    },
+    wheel:pixels=>{
+      const current=navigationRef.current;
+      if(current.cameraEye){
+        setLens(pinchFov(cameraFov(current.settings),Math.exp(-pixels*.002)));
+      }else orbitZoom(Math.exp(-pixels*.002));
+    },
+  });
+  useEffect(()=>{window.dispatchEvent(new Event('navigation-stop'));},[settings.trueScale,settings.showNearbyStars,settings.showCameraControl,resetCameraFlag,dimensions]);
+  useEffect(()=>{if(cameraFocusId)window.dispatchEvent(new Event('navigation-stop'));},[cameraFocusId]);
   const resetView = () => {
     window.dispatchEvent(new Event('navigation-stop'));
     if(!containerRef.current||!zoomBehaviorRef.current)return;
@@ -367,6 +460,7 @@ const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(({
     const pose=solarResetPose(scene.cameraPosition,current.settings.viewTilt,current.settings.viewYaw,current.settings.viewRoll??0,scene.focusDistanceAU);
     const selection=d3.select(containerRef.current);selection.interrupt();
     const startEye=scene.cameraPosition,roaming=!!current.cameraEye;
+    setRoamTarget(roaming?{id:null,center:ORIGIN}:null);
     const scale=current.settings.trueScale?AU_SCALE_TRUE:AU_SCALE_SCHEMATIC;
     const focal=cameraFocalPixels(dimensions.w,dimensions.h,cameraFov(current.settings))/(perspectiveStrength(current.settings)||1);
     const targetK=focal/(scale*pose.distance);
@@ -396,33 +490,18 @@ const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(({
 
   useImperativeHandle(ref,()=>({openNearby:()=>{setNearbyPanelSignal(v=>v+1);if(neighborAlpha===0)showNeighbors();},
     toggleNearby:()=>{if(overviewDestination.current??(neighborAlpha>.5))returnToSolarSystem();else {setNearbyPanelSignal(v=>v+1);showNeighbors();}},resetView}));
-  const travelLabel = neighborAlpha > 0 ? `${(travelStep/LIGHT_YEAR_AU).toPrecision(2)} 光年/秒`
-    : travelStep < .01 ? `${(travelStep*149597870.7).toPrecision(2)} 千米/秒` : `${travelStep.toPrecision(2)} AU/秒`;
+  const positionUnit=observerDistance>=LIGHT_YEAR_AU?'LY':'AU';
+  const unitScale=positionUnit==='LY'?LIGHT_YEAR_AU:1;
+  const coordinate=(value:number)=>{
+    const n=value/unitScale;
+    return Math.abs(n)>=1e4||Math.abs(n)>0&&Math.abs(n)<.001?n.toExponential(2):n.toFixed(3);
+  };
+  const rate=flightRate(cameraScene.cameraPosition);
+  const rateLabel=rate>=LIGHT_YEAR_AU*.01 ? `${(rate/LIGHT_YEAR_AU).toPrecision(3)} LY/S` : `${rate.toPrecision(3)} AU/S`;
 
   return (
     <div ref={containerRef} data-scene className="w-full h-full min-w-0 min-h-0 flex-1 bg-black cursor-move relative overflow-hidden"
-      onTouchStartCapture={e=>{if(e.touches.length===2&&!(e.target as Element).closest('[data-scene-ui]'))touchAngle.current=Math.atan2(e.touches[1].clientY-e.touches[0].clientY,e.touches[1].clientX-e.touches[0].clientX);}}
-      onTouchMoveCapture={e=>{if(touchAngle.current===null||e.touches.length!==2)return;
-        const angle=Math.atan2(e.touches[1].clientY-e.touches[0].clientY,e.touches[1].clientX-e.touches[0].clientX);
-        const delta=Math.atan2(Math.sin(angle-touchAngle.current),Math.cos(angle-touchAngle.current))*180/Math.PI;
-        if(Math.abs(delta)>1.2){touchAngle.current=angle;applyNavigation({yaw:0,pitch:0,roll:-delta,right:0,down:0,forward:0});}
-      }}
-      onTouchEndCapture={()=>{touchAngle.current=null;}} onTouchCancelCapture={()=>{touchAngle.current=null;}}
-      onContextMenu={e=>{if(!(e.target as Element).closest('[data-scene-ui]'))e.preventDefault();}}
-      onPointerDownCapture={e=>{
-        if((e.button!==2&&!(e.button===0&&e.altKey))||e.pointerType==='touch'||(e.target as Element).closest('[data-scene-ui]'))return;
-        e.preventDefault();lookDrag.current={id:e.pointerId,x:e.clientX,y:e.clientY,distance:0};suppressSceneClick.current=false;e.currentTarget.setPointerCapture(e.pointerId);
-      }}
-      onPointerMove={e=>{const d=lookDrag.current;if(!d||d.id!==e.pointerId)return;
-        const dx=e.clientX-d.x,dy=e.clientY-d.y;d.x=e.clientX;d.y=e.clientY;d.distance+=Math.hypot(dx,dy);
-        if(d.distance>4)suppressSceneClick.current=true;
-        const sensitivity=cameraFov(navigationRef.current.settings)/Math.min(dimensions.w,dimensions.h);
-        applyNavigation({yaw:dx*sensitivity,pitch:dy*sensitivity,roll:0,right:0,down:0,forward:0});
-      }}
-      onPointerUp={e=>{if(lookDrag.current?.id===e.pointerId){lookDrag.current=null;setTimeout(()=>{suppressSceneClick.current=false;},0);if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}}}
-      onPointerCancel={()=>{lookDrag.current=null;}}
-      onLostPointerCapture={()=>{lookDrag.current=null;}}
-      onClickCapture={e=>{if(suppressSceneClick.current){e.stopPropagation();suppressSceneClick.current=false;}}}>
+      style={{touchAction:"none",userSelect:"none"}} {...gestures}>
       <div className="absolute inset-0 pointer-events-none bg-black" style={{ opacity: 1 - neighborAlpha }}>
          <div className="absolute inset-0 bg-[#020306]" />
          {settings.skyEnabled !== false && neighborAlpha < 1 && <StarField
@@ -458,31 +537,33 @@ const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(({
         onReturn={returnToSolarSystem} onSelect={() => onPlanetSelect(null)} onLocate={locateStar}
         scene={cameraScene} roaming={!!cameraEye} panelSignal={nearbyPanelSignal} />}
       <VirtualJoystick enabled={settings.showCameraControl} onInput={applyNavigation} onReset={resetView}
-        onModeChange={toggleRoaming} roaming={!!cameraEye} stellar={neighborAlpha > 0} travelLabel={travelLabel}
+        onModeChange={toggleRoaming} roaming={!!cameraEye}
+        lensEnabled={settings.enablePerspective} onLensReset={()=>setLens(72)}
         />
 
-      {/* Minimalist Compact Watermark Camera Info - Bottom Left */}
-      <div data-camera-info className="absolute top-3 left-4 pointer-events-none z-20 flex flex-col gap-px select-none text-gray-600 text-[10px] font-mono font-bold tracking-widest uppercase">
-         <span className="flex items-center gap-2"><span>TGT</span> <span>{neighborAlpha > 0 ? 'SOLAR NEIGHBOURHOOD' : getTargetName()}</span></span>
-         <span className="flex items-center gap-2"><span>ZM</span> <span>{zoomTransform.k.toExponential(1)}x</span></span>
-         <span className="flex items-center gap-2"><span>TILT</span> <span>{settings.viewTilt.toFixed(0)}°</span></span>
-         <span className="flex items-center gap-2"><span>YAW</span> <span>{settings.viewYaw.toFixed(0)}°</span></span>
-         <span className="flex items-center gap-2"><span>ROLL</span> <span>{(settings.viewRoll??0).toFixed(0)}°</span></span>
+      <div data-camera-info className="camera-telemetry">
+        <span><b>MODE</b><span>{cameraEye?'FLIGHT':'ORBIT'}</span></span>
+        <span><b>TGT</b><span>{getTargetName()}</span></span>
+        <span><b>VIEW</b><span>{settings.enablePerspective?`PERSP ${cameraFov(settings).toFixed(0)}°`:'ORTHO'}</span></span>
+        <span><b>ATT</b><span>{[settings.viewTilt,settings.viewYaw,settings.viewRoll??0].map(v=>v.toFixed(1)).join(' / ')}°</span></span>
+        <span><b>POS</b><span>{[cameraScene.cameraPosition.x,cameraScene.cameraPosition.y,cameraScene.cameraPosition.z].map(coordinate).join(' / ')} {positionUnit}</span></span>
+        {cameraEye&&<span><b>SPD</b><span>AUTO {rateLabel}</span></span>}
       </div>
     </div>
   );
 
   function getTargetName() {
-      if (!cameraFocusId) return "SUN (FREE)";
-      if (cameraFocusId === 'sun') return "SUN";
+      const id=cameraFocusId??roamTarget?.id;
+      if (!id) return freeOrbitCenter && Math.hypot(freeOrbitCenter.x,freeOrbitCenter.y,freeOrbitCenter.z)>1e-10 ? "ORBIT TARGET" : "SUN";
+      if (id === 'sun') return "SUN";
       const allBodies = [...planets, ...dwarfs, ...asteroidsComets];
-      const p = allBodies.find(x => x.id === cameraFocusId);
+      const p = allBodies.find(x => x.id === id);
       if (p) return p.englishName.toUpperCase();
       for (const pl of planets) {
-          const m = pl.satellites?.find(s => s.id === cameraFocusId);
+          const m = pl.satellites?.find(s => s.id === id);
           if (m) return `${m.englishName.toUpperCase()}`;
       }
-      return cameraFocusId.toUpperCase();
+      return id.toUpperCase();
   }
 });
 

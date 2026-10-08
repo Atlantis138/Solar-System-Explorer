@@ -48,7 +48,7 @@ test('movement enables real perspective immediately, and old contrast units migr
   assert.ok(enabled.showCameraControl && enabled.enableSpaceView && enabled.enablePerspective);
   assert.equal(enabled.enableProximitySim, true);
   const disabled = setCameraMovement(enabled, false);
-  assert.ok(!disabled.showCameraControl && !disabled.enablePerspective && !disabled.enableSpaceView);
+  assert.ok(!disabled.showCameraControl && disabled.enablePerspective && disabled.enableSpaceView, 'disabling input preserves the lens and projection');
   assert.ok(setCameraMovement(disabled, true).enablePerspective);
   const old = { showCameraControl: true, enableSpaceView: false, enablePerspective: false, orbitPerspectiveIntensity: 4 };
   const migrated = migrateCameraSettings(old);
@@ -85,4 +85,12 @@ test('constellation names and boundaries default off for fresh settings and all 
     assert.equal(next.showConstellationBoundaries, false);
   }
   assert.equal(selectedSkyPreset({ ...SYSTEM_DEFAULTS, showConstellationNames: true }), undefined);
+});
+
+
+test('old manual cruise multipliers are retired so they cannot bias automatic flight',()=>{
+ const migrated=migrateCameraSettings({cameraSettingsVersion:3,cameraTravelSpeed:1e6,cameraFov:50,viewYaw:72});
+ assert.equal(migrated.cameraSettingsVersion,4);assert.equal(migrated.cameraTravelSpeed,undefined);
+ assert.equal(migrated.viewYaw,72);assert.equal(migrated.cameraFov,50);
+ assert.equal(migrateCameraSettings({...migrated,cameraTravelSpeed:.05}).cameraTravelSpeed,undefined);
 });

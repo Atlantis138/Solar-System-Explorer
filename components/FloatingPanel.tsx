@@ -34,6 +34,7 @@ export default function FloatingPanel({ id, title, subtitle, children, onClose, 
   const drag = useRef<{ id: number; x: number; y: number; px: number; py: number } | null>(null);
   const bringForward = () => setOrder(next());
   const restore = () => { setMinimized(false); bringForward(); };
+  useEffect(() => { if (!minimized) window.dispatchEvent(new Event('navigation-stop')); }, [minimized, revealKey]);
   useEffect(() => { if (revealKey !== undefined) restore(); }, [revealKey]);
   useEffect(() => { register({ id, title, pinned, minimized, order, restore }); }, [id, title, pinned, minimized, order]);
   useEffect(() => () => remove(id), [id, remove]);
@@ -72,7 +73,7 @@ export default function FloatingPanel({ id, title, subtitle, children, onClose, 
       maxHeight: `var(--panel-height-limit, calc(100dvh - ${position?.y ?? top}px - var(--scene-bottom-space, 112px)))`,
       ['--panel-top' as string]: `${position?.y ?? top}px`,
       zIndex: (pinned ? 3000 : 1000) + workspace.entries.filter(p => p.pinned === pinned && p.order < order).length }}
-    onPointerDownCapture={bringForward} onWheel={e => e.stopPropagation()} onDoubleClick={e => e.stopPropagation()}>
+    onPointerDownCapture={()=>{window.dispatchEvent(new Event('navigation-stop'));bringForward();}} onWheel={e => e.stopPropagation()} onDoubleClick={e => e.stopPropagation()}>
     <header className="floating-panel-header" onPointerDown={e => {
       if (e.button !== 0 || (e.target as Element).closest('button,input,a,select')) return;
       e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId);

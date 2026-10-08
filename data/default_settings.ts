@@ -18,7 +18,6 @@ export const SYSTEM_DEFAULTS: AppSettings = {
   nearbyShowGuides: true,
   cameraFov: 72,
   cameraPerspective: 1,
-  cameraTravelSpeed: 1,
   orbitOpacity: 1.0,
   orbitCategoryOpacity: {...DEFAULT_ORBIT_CATEGORY_OPACITY},
   orbitPerspectiveIntensity: 1.0,
@@ -53,7 +52,7 @@ export const SYSTEM_DEFAULTS: AppSettings = {
   viewTilt: 90, 
   viewYaw: 0, 
   showCameraControl: false,
-  cameraSettingsVersion: 3,
+  cameraSettingsVersion: 4,
   enableSpaceView: false, 
   enablePerspective: false,
   enableProximitySim: true

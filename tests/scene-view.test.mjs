@@ -73,3 +73,60 @@ test('a nearby satellite system remains resolved with its barycentre behind the 
  assert.equal(scene.projectedSystemOpacity(center,.003),1);
  assert.equal(scene.projectedSystemOpacity({x:0,y:-10,z:0},.001),0);
 });
+
+// Compare rendered screen-space strokes, not merely the stored orbit zoom.
+const {targetOrbitPose}=await importTs(new URL('../core/cameraNavigation.ts',import.meta.url));
+const {drawOrbitPaths}=await importTs(new URL('../core/orbitDrawing.ts',import.meta.url));
+function trackStrokes(scene,settings,center) {
+  const strokes=[];
+  const ctx={save(){},restore(){},setLineDash(){},beginPath(){},moveTo(x,y){this.start=[x*scene.zoom,y*scene.zoom];},lineTo(x,y){this.end=[x*scene.zoom,y*scene.zoom];},stroke(){strokes.push({start:this.start,end:this.end,width:this.lineWidth*scene.zoom,alpha:this.globalAlpha});}};
+  const points=Array.from({length:181},(_,i)=>{const a=i/180*Math.PI*2;return scene.project({x:center.x+Math.cos(a),y:center.y+Math.sin(a),z:center.z});});
+  drawOrbitPaths(ctx,[{points,color:'#fff',opacity:1,emphasized:false}],{zoom:scene.zoom,perspective:true,tilt:settings.viewTilt,intensity:1,scale:scene.scale,trueScale:scene.trueScale,scene});
+  return strokes;
+}
+
+test('same physical observer has identical orbit visibility and stroke style in flight and orbit', () => {
+  for(const scale of [65,23500]) for(const [width,height] of [[1280,800],[390,844]]) for(const strength of [.2,1]) for(const fov of [30,72,100]) for(const radius of [10,30,60,120]) {
+    const center={x:2,y:3,z:1},eye={x:2+radius*.3,y:3-radius*.4,z:1+radius*Math.sqrt(.75)};
+    const initial={...SYSTEM_DEFAULTS,enablePerspective:true,trueScale:scale===23500,cameraPerspective:strength,cameraFov:fov};
+    const pose=targetOrbitPose(eye,center,initial,scale,width,height),settings={...initial,...pose,viewRoll:24};
+    const base={scale,width,height,settings,center};
+    const flight=createSceneView({...base,observer:eye,zoom:{x:width/2,y:height/2,k:.8}});
+    const orbit=createSceneView({...base,zoom:{x:width/2,y:height/2,k:pose.zoom}});
+    assert.ok(Math.abs(flight.rangeOpacity(radius)-orbit.rangeOpacity(radius))<1e-10);
+    if(strength===1&&fov===72)assert.ok(flight.rangeOpacity(radius)>.9);
+    const a=trackStrokes(flight,settings,center),b=trackStrokes(orbit,settings,center);
+    if(strength===1&&fov===72)assert.ok(a.length>0);
+    assert.equal(a.length,b.length);
+    for(let i=0;i<a.length;i++) {
+      assert.ok(Math.abs(a[i].alpha-b[i].alpha)<1e-9);
+      assert.ok(Math.abs(a[i].width-b[i].width)<1e-9);
+      // Projected x/y are relative to zoom translation; compare segment lengths.
+      assert.ok(Math.abs(Math.hypot(a[i].end[0]-a[i].start[0],a[i].end[1]-a[i].start[1])-Math.hypot(b[i].end[0]-b[i].start[0],b[i].end[1]-b[i].start[1]))<1e-7);
+    }
+  }
+});
+
+const {drawRegionBoundaries}=await importTs(new URL('../core/regionDrawing.ts',import.meta.url));
+const {drawAsteroidBelt}=await importTs(new URL('../core/asteroidBelt.ts',import.meta.url));
+test('regional guides and asteroid point styles share the physical scale after a backed-away return', () => {
+  const center={x:0,y:0,z:0},eye={x:0,y:0,z:70},settings={...SYSTEM_DEFAULTS,enablePerspective:true,viewTilt:90,viewYaw:0};
+  const pose=targetOrbitPose(eye,center,settings,65,1280,800);
+  const base={scale:65,width:1280,height:800,settings,center};
+  const views=[createSceneView({...base,observer:eye,zoom:{x:640,y:400,k:.8}}),createSceneView({...base,zoom:{x:640,y:400,k:pose.zoom}})];
+  const record=(scene,regions)=>{
+    const strokes=[],letters=[],particles=[];
+    const ctx={save(){},restore(){},scale(){},setLineDash(){},beginPath(){},moveTo(){},lineTo(){},stroke(){strokes.push({width:this.lineWidth*scene.zoom,alpha:this.globalAlpha})},fillText(text,x,y){letters.push({text,font:this.font,alpha:this.globalAlpha,x,y})},arc(x,y,r){particles.push({x,y,r})},fill(){}};
+    if(regions)drawRegionBoundaries(ctx,scene);
+    else drawAsteroidBelt(ctx,1280,800,65,settings,{x:640,y:400,k:scene.zoom},center,new Date('2026-10-08T00:00:00Z'),.6,scene);
+    return [...strokes,...letters,...particles];
+  };
+  for(const regions of [true,false]) {
+    const a=record(views[0],regions),b=record(views[1],regions);
+    assert.ok(a.length>0);assert.equal(a.length,b.length);
+    for(let i=0;i<a.length;i++)for(const key of Object.keys(a[i])) {
+      if(typeof a[i][key]==='number')assert.ok(Math.abs(a[i][key]-b[i][key])<1e-8);
+      else assert.equal(a[i][key],b[i][key]);
+    }
+  }
+});
