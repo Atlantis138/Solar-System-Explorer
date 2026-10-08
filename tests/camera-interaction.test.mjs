@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { importTs } from './helpers/import-ts.mjs';
-const { targetOrbitPose, orbitGestureTransform, pinchFov, framedOrbitPose, automaticTravelSpeed, sceneDragPans, wheelPixels } = await importTs(new URL('../core/cameraNavigation.ts', import.meta.url));
+const { targetOrbitPose, orbitGestureTransform, pinchTravelDelta, travelMultiplier, multiplierSliderValue, multiplierFromSlider, framedOrbitPose, automaticTravelSpeed, sceneDragPans, wheelPixels } = await importTs(new URL('../core/cameraNavigation.ts', import.meta.url));
 const { createSceneView } = await importTs(new URL('../core/sceneView.ts', import.meta.url));
 const { moveObserver, rotateCameraLocal } = await importTs(new URL('../core/cameraOptics.ts', import.meta.url));
 const { SYSTEM_DEFAULTS } = await importTs(new URL('../data/default_settings.ts', import.meta.url));
@@ -30,7 +30,7 @@ test('600 flight, lens and orbit rebuilds retain the real target and never reuse
   const center={x:0,y:0,z:0},options={scale:65,width:1000,height:700,center};
   let zoom={x:500,y:350,k:.8},scene=createSceneView({...options,settings,zoom}),eye=scene.cameraPosition;
   for(let i=0;i<600;i++) {
-    settings={...settings,...rotateCameraLocal(settings.viewTilt,settings.viewYaw,settings.viewRoll??0,.7,.3),cameraFov:pinchFov(settings.cameraFov,i%2?1.03:1/1.03)};
+    settings={...settings,...rotateCameraLocal(settings.viewTilt,settings.viewYaw,settings.viewRoll??0,.7,.3),cameraFov:i%2?70:72};
     eye=moveObserver(eye,settings.viewTilt,settings.viewYaw,.01,-.004,.02,settings.viewRoll);
     const pose=targetOrbitPose(eye,center,settings,65,1000,700);
     settings={...settings,viewTilt:pose.viewTilt,viewYaw:pose.viewYaw,viewRoll:pose.viewRoll};
@@ -60,14 +60,15 @@ test('backing away then orbit zooming can approach the Sun and retreat symmetric
   }
 });
 
-test('lens pinch is reversible and bounded; wheel units are normalized', () => {
-  assert.ok(Math.abs(pinchFov(pinchFov(72,1.2),1/1.2)-72)<1e-10);
-  assert.equal(pinchFov(72,1e8),30);assert.equal(pinchFov(72,1e-8),100);
-  assert.equal(pinchFov(72,NaN),72);
-  assert.equal(wheelPixels(3,1,390),48);assert.equal(wheelPixels(48,0,390),48);
-  assert.equal(wheelPixels(5,2,390),240);
+test('pinch travel is reversible from its baseline, and wheel multipliers are bounded', () => {
+  const forward=pinchTravelDelta(60,1.5);
+  assert.ok(Math.abs(forward-20)<1e-10);
+  assert.ok(Math.abs(pinchTravelDelta(60-forward,1/1.5)+forward)<1e-10);
+  assert.equal(pinchTravelDelta(60,1),0);assert.equal(pinchTravelDelta(60,NaN),0);
+  assert.equal(travelMultiplier(Infinity),1);assert.equal(travelMultiplier(1e6),100);assert.equal(travelMultiplier(0),.05);
+  for(const multiplier of [.05,1,5,100])assert.ok(Math.abs(multiplierFromSlider(multiplierSliderValue(multiplier))/multiplier-1)<1e-10);
+  assert.equal(wheelPixels(3,1,390),48);assert.equal(wheelPixels(48,0,390),48);assert.equal(wheelPixels(5,2,390),240);
 });
-
 
 test('two-finger zoom and pan use one baseline so sequential finger events cannot accumulate drift', () => {
   const base={x:195,y:422,k:.8};

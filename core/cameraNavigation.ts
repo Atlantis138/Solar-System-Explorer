@@ -6,13 +6,17 @@ import { LIGHT_YEAR_AU, solarDistanceBlend } from './nearbyStars';
 /** Automatic cruise rate in AU/s. Local proximity keeps planetary and moon
  * approaches usable; the same solar-distance blend as the star field raises
  * the rate for interstellar travel. Lens, zoom and device size never enter it. */
-export function automaticTravelSpeed(eye:Position, anchors:readonly Position[]=[]) {
-  const solarDistance=Math.hypot(eye.x,eye.y,eye.z);
-  let nearest=solarDistance;
+export function travelContextDistance(eye:Position, anchors:readonly Position[]=[]) {
+  let nearest=Math.hypot(eye.x,eye.y,eye.z);
   for(const p of anchors) {
     const d=Math.hypot(eye.x-p.x,eye.y-p.y,eye.z-p.z);
     if(Number.isFinite(d))nearest=Math.min(nearest,d);
   }
+  return nearest;
+}
+export function automaticTravelSpeed(eye:Position, anchors:readonly Position[]=[]) {
+  const solarDistance=Math.hypot(eye.x,eye.y,eye.z);
+  const nearest=travelContextDistance(eye,anchors);
   const blend=solarDistanceBlend(solarDistance);
   const solarRate=Math.max(1e-7,nearest*.4);
   const stellarRate=Math.max(1e-7,nearest*.8);
@@ -25,10 +29,15 @@ export function wheelPixels(delta: number, mode: number, shortAxis: number) {
   return Math.max(-240, Math.min(240, delta * (mode === 1 ? 16 : mode === 2 ? shortAxis : 1)));
 }
 
-/** Pinch changes the lens's magnification, never the observer or travel scale. */
-export function pinchFov(fov: number, ratio: number) {
-  if (!(ratio > 0) || !Number.isFinite(ratio)) return fov;
-  return Math.max(30, Math.min(100, Math.atan(Math.tan(fov * Math.PI / 360) / ratio) * 360 / Math.PI));
+export const travelMultiplier=(value=1)=>Math.max(.05,Math.min(100,Number.isFinite(value)?value:1));
+export const multiplierSliderValue=(value:number)=>Math.log(travelMultiplier(value)/.05)/Math.log(2000);
+export const multiplierFromSlider=(value:number)=>.05*Math.pow(2000,Math.max(0,Math.min(1,value)));
+
+/** A baseline gesture advances along the view direction without changing speed
+ * or lens. Spreading fingers matches orbit approach; closing them retreats. */
+export function pinchTravelDelta(distance:number,ratio:number) {
+  if(!(ratio>0)||!Number.isFinite(ratio))return 0;
+  return Math.max(1e-7,distance)*(1-1/Math.max(.1,Math.min(10,ratio)));
 }
 
 /** Restore the real orbit target. Radius is measured from the observer, never

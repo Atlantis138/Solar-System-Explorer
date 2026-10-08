@@ -18,6 +18,7 @@ export const SYSTEM_DEFAULTS: AppSettings = {
   nearbyShowGuides: true,
   cameraFov: 72,
   cameraPerspective: 1,
+  cameraTravelMultiplier: 1,
   orbitOpacity: 1.0,
   orbitCategoryOpacity: {...DEFAULT_ORBIT_CATEGORY_OPACITY},
   orbitPerspectiveIntensity: 1.0,
@@ -51,9 +52,9 @@ export const SYSTEM_DEFAULTS: AppSettings = {
   strictSolarRadius: DEFAULT_SUN_ANGULAR_RADIUS_DEG,
   viewTilt: 90, 
   viewYaw: 0, 
-  showCameraControl: false,
+  showCameraControl: true,
   cameraSettingsVersion: 4,
-  enableSpaceView: false, 
-  enablePerspective: false,
+  enableSpaceView: true,
+  enablePerspective: true,
   enableProximitySim: true
 };

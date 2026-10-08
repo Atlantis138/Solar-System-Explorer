@@ -31,7 +31,10 @@ export function useSceneGestures(container: RefObject<HTMLDivElement | null>, ca
     const wheel = (event: WheelEvent) => {
       if (isUI(event.target) || event.altKey || event.metaKey) return;
       event.preventDefault(); latest.current.interrupt();
-      latest.current.wheel(wheelPixels(event.deltaY, event.deltaMode, latest.current.shortAxis));
+      const pixels=wheelPixels(event.deltaY,event.deltaMode,latest.current.shortAxis);
+      // Trackpad pinch arrives as Ctrl-wheel; keep it on the pinch channel.
+      if(event.ctrlKey){latest.current.beginPinch();latest.current.pinch(Math.exp(-pixels*.002),0,0);}
+      else latest.current.wheel(pixels);
     };
     const visibility = () => { if (document.hidden) stop(); };
     element.addEventListener('wheel', wheel, { passive: false });

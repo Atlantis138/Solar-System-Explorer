@@ -1,4 +1,5 @@
 import { createPortal } from 'react-dom';
+import { travelMultiplier, multiplierSliderValue, multiplierFromSlider } from '../core/cameraNavigation';
 
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -155,8 +156,11 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 {settings.enablePerspective && <Slider label="视场角" min={30} max={100} step={1} value={cameraFov(settings)} display={`${cameraFov(settings)}°`}
                   onChange={value => set({ cameraFov: value })} />}
                 {!settings.enablePerspective && <p className="settings-note">正交投影没有镜头视场；选择透视后可调整。</p>}
+                <Slider label="航速倍率" min={0} max={1} step={.005} value={multiplierSliderValue(settings.cameraTravelMultiplier??1)}
+                  display={`${travelMultiplier(settings.cameraTravelMultiplier).toFixed(2)}×`}
+                  onChange={value=>set({cameraTravelMultiplier:multiplierFromSlider(value)})}/>
                 {settings.enablePerspective && <Slider label="轨道远近对比" max={2} value={settings.orbitPerspectiveIntensity} onChange={value => set({ orbitPerspectiveIntensity: value })} />}
-                <p className="settings-note">左拖平移，右拖转向；漫游自动调速。按 H 查看操作。</p>
+                <p className="settings-note">漫游航速为自动航速 × 倍率；滚轮调倍率，捏合前进／后退。</p>
               </div>}
             </Section>
 

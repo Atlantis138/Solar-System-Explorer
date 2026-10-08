@@ -8,8 +8,6 @@ interface Props {
   onReset:()=>void;
   onModeChange:()=>void;
   roaming:boolean;
-  lensEnabled:boolean;
-  onLensReset:()=>void;
 }
 const zero=():NavigationInput=>({yaw:0,pitch:0,roll:0,right:0,down:0,forward:0});
 const motionCodes=['KeyW','KeyA','KeyS','KeyD','KeyQ','KeyE','KeyR','KeyF','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'];
@@ -52,7 +50,6 @@ export const VirtualJoystick:React.FC<Props>=props=>{
       if(motionCodes.includes(e.code)){if(!callbacks.current.enabled&&['KeyW','KeyA','KeyS','KeyD','KeyR','KeyF'].includes(e.code))return;e.preventDefault();keys.current.add(e.code);start();}
       else if(!e.repeat&&e.code==='Home'){e.preventDefault();stop();callbacks.current.onReset();}
       else if(!e.repeat&&e.code==='KeyV'){e.preventDefault();stop();callbacks.current.onModeChange();}
-      else if(!e.repeat&&callbacks.current.roaming&&callbacks.current.lensEnabled&&e.code==='KeyZ'){e.preventDefault();callbacks.current.onLensReset();}
     };
     const up=(e:KeyboardEvent)=>{keys.current.delete(e.code);};
     const visibility=()=>{if(document.hidden)stop();};
@@ -76,13 +73,13 @@ export const VirtualJoystick:React.FC<Props>=props=>{
     <i style={{transform:`translate(calc(-50% + ${knobs[kind].x}px),calc(-50% + ${knobs[kind].y}px))`}}/>
   </div>;
   return <div data-scene-ui className="camera-navigation" aria-label="视角导航">
-    {props.roaming && <div className="camera-float camera-left">{pad('move')}</div>}
+    {props.enabled&&props.roaming && <div className="camera-float camera-left">{pad('move')}</div>}
     <div className="camera-float camera-right">
       <div className="camera-actions">
         <button onClick={props.onModeChange} aria-label={props.roaming?'切换到环绕':'切换到漫游'} aria-pressed={props.roaming} title={`${props.roaming?'漫游：自由移动':'环绕：围绕目标'} · V`}><svg viewBox="0 0 24 24">{props.roaming?<><path d="m12 3 8 18-8-5-8 5 8-18Z"/><path d="M12 3v13"/></>:<><ellipse cx="12" cy="12" rx="10" ry="5" transform="rotate(-35 12 12)"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="7" r="1.5" fill="currentColor" stroke="none"/></>}</svg></button>
         <button onClick={props.onReset} aria-label="视角归正" title="看向太阳，再次俯视 · Home"><svg viewBox="0 0 24 24"><path d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/><path d="M2.458 12C3.732 7.943 7.523 5 12 5s8.268 2.943 9.542 7C20.268 16.057 16.477 19 12 19S3.732 16.057 2.458 12Z"/></svg></button>
       </div>
-      {pad('look')}
+      {props.enabled&&pad('look')}
     </div>
   </div>;
 };

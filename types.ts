@@ -150,6 +150,7 @@ export interface AppSettings {
   nearbyShowGuides?: boolean;
   cameraFov?: number;
   cameraPerspective?: number; // 0 is orthographic, 1 is full perspective
+  cameraTravelMultiplier?: number; // Multiplier applied after the automatic cruise rate.
   cameraTravelSpeed?: number; // Legacy preference, removed by migration; flight speed is automatic.
   orbitOpacity: number; // 0.0 to 1.0
   orbitCategoryOpacity?: Partial<Record<OrbitCategory,number>>;

@@ -13,7 +13,7 @@ import { VirtualJoystick, NavigationInput } from './VirtualJoystick';
 import { createSceneView } from '../core/sceneView';
 import { cameraFocalPixels, cameraFov, perspectiveStrength, moveObserver, rotateCameraLocal, solarResetPose, cameraBasis } from '../core/cameraOptics';
 import { nearbyOpacity, nearbyPositionAU, solarZoomExtent, LIGHT_YEAR_AU } from '../core/nearbyStars';
-import { dragDegreesPerPixel, framedOrbitPose, orbitGestureTransform, pinchFov, automaticTravelSpeed } from '../core/cameraNavigation';
+import { dragDegreesPerPixel, framedOrbitPose, orbitGestureTransform, pinchTravelDelta, automaticTravelSpeed, travelContextDistance, travelMultiplier } from '../core/cameraNavigation';
 import { useSceneGestures } from '../hooks/useSceneGestures';
 import { setCameraMovement } from '../core/cameraSettings';
 
@@ -340,7 +340,7 @@ const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(({
     }
     return points;
   },[planets,dwarfs,currentDate,settings.useHighPrecision,settings.trueScale,settings.showDwarfPlanets,visibilityMap,settings.showCameraControl,!!cameraEye]);
-  const flightRate=(eye:Position)=>automaticTravelSpeed(eye,[...navigationAnchors,centerOfRotation]);
+  const flightRate=(eye:Position)=>automaticTravelSpeed(eye,[...navigationAnchors,centerOfRotation])*travelMultiplier(navigationRef.current.settings.cameraTravelMultiplier);
   const syncTransform = (transform: d3.ZoomTransform) => {
     if (!containerRef.current || !zoomBehaviorRef.current) return;
     d3.select(containerRef.current).interrupt().call(zoomBehaviorRef.current.transform, transform);
@@ -401,9 +401,8 @@ const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(({
     setCameraEye(scene.cameraPosition);onCameraFocusChange(null);onSettingsChange(baseSettings);
     syncTransform(d3.zoomIdentity.translate(current.dimensions.w/2,current.dimensions.h/2).scale(current.zoom.k));
   };
-  const setLens = (fov:number) => {
-    if(!navigationRef.current.settings.enablePerspective)return;
-    const next={...navigationRef.current.settings,cameraFov:fov};
+  const setTravelMultiplier=(value:number)=>{
+    const next={...navigationRef.current.settings,cameraTravelMultiplier:travelMultiplier(value)};
     navigationRef.current.settings=next;onSettingsChange(next);
   };
   const orbitZoom = (ratio:number) => {
@@ -422,7 +421,7 @@ const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(({
       navigationRef.current.cameraEye=next;setCameraEye(next);
     }else syncTransform(d3.zoomIdentity.translate(current.zoom.x+dx,current.zoom.y+dy).scale(current.zoom.k));
   };
-  const pinchStart=useRef({zoom:zoomTransform,fov:cameraFov(settings)});
+  const pinchStart=useRef({zoom:zoomTransform,eye:cameraEye,distance:0,settings});
   const gestures=useSceneGestures(containerRef,{
     shortAxis:Math.min(dimensions.w,dimensions.h),
     interrupt:()=>{if(containerRef.current)d3.select(containerRef.current).interrupt();},
@@ -433,10 +432,19 @@ const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(({
       navigationRef.current.settings=next;onSettingsChange(next);
     },
     pan:panScene,
-    beginPinch:()=>{pinchStart.current={zoom:navigationRef.current.zoom,fov:cameraFov(navigationRef.current.settings)};},
+    beginPinch:()=>{
+      const current=navigationRef.current;
+      pinchStart.current={zoom:current.zoom,eye:current.cameraEye,settings:current.settings,
+        distance:current.cameraEye?travelContextDistance(current.cameraEye,[...navigationAnchors,centerOfRotation]):0};
+    },
     pinch:(ratio,dx,dy)=>{
       const current=navigationRef.current;
-      if(current.cameraEye)setLens(pinchFov(pinchStart.current.fov,ratio));
+      if(current.cameraEye&&pinchStart.current.eye){
+        const base=pinchStart.current;
+        const eye=moveObserver(base.eye!,base.settings.viewTilt,base.settings.viewYaw,0,0,
+          -pinchTravelDelta(base.distance,ratio),base.settings.viewRoll??0);
+        navigationRef.current.cameraEye=eye;setCameraEye(eye);
+      }
       else {
         const transform=orbitGestureTransform(pinchStart.current.zoom,current.dimensions.w,current.dimensions.h,ratio,dx,dy,solarZoomExtent(current.settings.trueScale,current.settings.showNearbyStars!==false));
         syncTransform(d3.zoomIdentity.translate(transform.x,transform.y).scale(transform.k));
@@ -445,7 +453,7 @@ const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(({
     wheel:pixels=>{
       const current=navigationRef.current;
       if(current.cameraEye){
-        setLens(pinchFov(cameraFov(current.settings),Math.exp(-pixels*.002)));
+        setTravelMultiplier(travelMultiplier(current.settings.cameraTravelMultiplier)*Math.exp(-pixels*.003));
       }else orbitZoom(Math.exp(-pixels*.002));
     },
   });
@@ -538,7 +546,6 @@ const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(({
         scene={cameraScene} roaming={!!cameraEye} panelSignal={nearbyPanelSignal} />}
       <VirtualJoystick enabled={settings.showCameraControl} onInput={applyNavigation} onReset={resetView}
         onModeChange={toggleRoaming} roaming={!!cameraEye}
-        lensEnabled={settings.enablePerspective} onLensReset={()=>setLens(72)}
         />
 
       <div data-camera-info className="camera-telemetry">
@@ -547,7 +554,7 @@ const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(({
         <span><b>VIEW</b><span>{settings.enablePerspective?`PERSP ${cameraFov(settings).toFixed(0)}°`:'ORTHO'}</span></span>
         <span><b>ATT</b><span>{[settings.viewTilt,settings.viewYaw,settings.viewRoll??0].map(v=>v.toFixed(1)).join(' / ')}°</span></span>
         <span><b>POS</b><span>{[cameraScene.cameraPosition.x,cameraScene.cameraPosition.y,cameraScene.cameraPosition.z].map(coordinate).join(' / ')} {positionUnit}</span></span>
-        {cameraEye&&<span><b>SPD</b><span>AUTO {rateLabel}</span></span>}
+        {cameraEye&&<span><b>SPD</b><span>AUTO ×{travelMultiplier(settings.cameraTravelMultiplier).toFixed(2)} {rateLabel}</span></span>}
       </div>
     </div>
   );
