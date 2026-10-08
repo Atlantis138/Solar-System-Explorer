@@ -53,7 +53,7 @@ export const SYSTEM_DEFAULTS: AppSettings = {
   viewTilt: 90, 
   viewYaw: 0, 
   showCameraControl: true,
-  cameraSettingsVersion: 4,
+  cameraSettingsVersion: 5,
   enableSpaceView: true,
   enablePerspective: true,
   enableProximitySim: true

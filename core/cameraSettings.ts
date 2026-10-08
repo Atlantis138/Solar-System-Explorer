@@ -11,9 +11,11 @@ export function setCameraMovement(settings: AppSettings, enabled: boolean): AppS
 export function migrateCameraSettings(saved: Partial<AppSettings>): Partial<AppSettings> {
   const {cameraTravelSpeed: _obsoleteSpeed,...current}=saved;
   const version = current.cameraSettingsVersion ?? 0;
-  if (version >= 4) return current;
-  if (version >= 3) return {...current,cameraSettingsVersion:4};
-  return { ...current, cameraSettingsVersion: 4, enableProximitySim: true, cameraFov: 72, cameraPerspective: 1,
+  if (version >= 5) return current;
+  const perspectiveDefault=current.enablePerspective===false || current.cameraPerspective===0
+    ? {enablePerspective:true,cameraPerspective:1} : {};
+  if (version >= 3) return {...current,...perspectiveDefault,cameraSettingsVersion:5};
+  return { ...current, ...perspectiveDefault, cameraSettingsVersion: 5, enableProximitySim: true, cameraFov: 72, cameraPerspective: 1,
     ...(version < 1 && saved.orbitPerspectiveIntensity !== undefined
       ? { orbitPerspectiveIntensity: saved.orbitPerspectiveIntensity / 4 } : {}),
     ...(saved.showCameraControl && !saved.enableSpaceView ? { enableSpaceView: true, enablePerspective: true } : {}),

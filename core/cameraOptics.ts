@@ -6,6 +6,9 @@ export const perspectiveStrength = (settings: AppSettings) => settings.enablePer
   ? Math.max(.01, Math.min(1, settings.cameraPerspective ?? 1)) : 0;
 export const cameraFocalPixels = (width: number, height: number, fov = 72) =>
   Math.min(width, height) / (2 * Math.tan(Math.max(30, Math.min(100, fov)) * Math.PI / 360));
+/** Orbit zoom controls distance at a fixed reference lens, independently of FOV. */
+export const orbitFocalPixels = (width:number, height:number, settings:AppSettings) =>
+  cameraFocalPixels(width,height,72) / (perspectiveStrength(settings) || 1);
 export function cameraBasis(tiltDegrees: number, yawDegrees: number, rollDegrees = 0) {
   const tilt = tiltDegrees * Math.PI / 180, yaw = yawDegrees * Math.PI / 180, roll = rollDegrees * Math.PI / 180;
   const st = Math.sin(tilt), ct = Math.cos(tilt), sy = Math.sin(yaw), cy = Math.cos(yaw), cr=Math.cos(roll), sr=Math.sin(roll);

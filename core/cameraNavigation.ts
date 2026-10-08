@@ -1,5 +1,5 @@
 import type { AppSettings, Position } from '../types';
-import { cameraBasis, cameraFocalPixels, cameraFov, perspectiveStrength } from './cameraOptics';
+import { cameraBasis, cameraFov, orbitFocalPixels } from './cameraOptics';
 
 import { LIGHT_YEAR_AU, solarDistanceBlend } from './nearbyStars';
 
@@ -52,7 +52,7 @@ export function targetOrbitPose(eye:Position, center:Position, settings:AppSetti
   const viewTilt=Math.asin(Math.max(-1,Math.min(1,back.z)))*180/Math.PI;
   const viewYaw=Math.hypot(back.x,back.y)>1e-8
     ? (Math.atan2(-back.x,-back.y)*180/Math.PI+360)%360 : settings.viewYaw;
-  const focal=cameraFocalPixels(width,height,cameraFov(settings))/(perspectiveStrength(settings)||1);
+  const focal=orbitFocalPixels(width,height,settings);
   return {viewTilt,viewYaw,viewRoll:0,distance,zoom:focal/(scale*distance)};
 }
 
@@ -68,7 +68,7 @@ export function framedOrbitPose(eye:Position, center:Position, settings:AppSetti
   if(distance<=Math.max(1e-10,radius*.05)) {
     return {...targetOrbitPose(eye,center,settings,scale,width,height),x:width/2,y:height/2};
   }
-  const focal=cameraFocalPixels(width,height,cameraFov(settings))/(perspectiveStrength(settings)||1);
+  const focal=orbitFocalPixels(width,height,settings);
   const zoom=focal/(scale*distance);
   return {viewTilt:settings.viewTilt,viewYaw:settings.viewYaw,viewRoll:settings.viewRoll??0,
     distance,zoom,x:width/2-dot(delta,basis.right)*scale*zoom,y:height/2-dot(delta,basis.down)*scale*zoom};

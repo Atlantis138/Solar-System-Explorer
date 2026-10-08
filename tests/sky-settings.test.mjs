@@ -90,7 +90,17 @@ test('constellation names and boundaries default off for fresh settings and all 
 
 test('old manual cruise multipliers are retired so they cannot bias automatic flight',()=>{
  const migrated=migrateCameraSettings({cameraSettingsVersion:3,cameraTravelSpeed:1e6,cameraFov:50,viewYaw:72});
- assert.equal(migrated.cameraSettingsVersion,4);assert.equal(migrated.cameraTravelSpeed,undefined);
+ assert.equal(migrated.cameraSettingsVersion,5);assert.equal(migrated.cameraTravelSpeed,undefined);
  assert.equal(migrated.viewYaw,72);assert.equal(migrated.cameraFov,50);
  assert.equal(migrateCameraSettings({...migrated,cameraTravelSpeed:.05}).cameraTravelSpeed,undefined);
+});
+test('legacy orthographic defaults upgrade once to perspective; later explicit choices remain',()=>{
+ assert.ok(SYSTEM_DEFAULTS.enablePerspective&&SYSTEM_DEFAULTS.showCameraControl);
+ assert.equal(SYSTEM_DEFAULTS.cameraPerspective,1);assert.equal(SYSTEM_DEFAULTS.cameraFov,72);
+ const upgraded=migrateCameraSettings({cameraSettingsVersion:4,enablePerspective:false,cameraPerspective:0,showCameraControl:false,cameraFov:60});
+ assert.equal(upgraded.enablePerspective,true);assert.equal(upgraded.cameraPerspective,1);
+ assert.equal(upgraded.showCameraControl,false);assert.equal(upgraded.cameraFov,60);
+ assert.deepEqual(migrateCameraSettings(upgraded),upgraded);
+ const choice={...upgraded,enablePerspective:false,cameraPerspective:0};
+ assert.deepEqual(migrateCameraSettings(choice),choice);
 });

@@ -1,7 +1,7 @@
 import type { AppSettings, Position } from '../types';
 import type { ProjectedPoint } from './projection';
 import { smoothStep } from './math';
-import { cameraFocalPixels, cameraFov, perspectiveStrength, cameraBasis } from './cameraOptics';
+import { cameraFocalPixels, cameraFov, perspectiveStrength, cameraBasis, orbitFocalPixels } from './cameraOptics';
 
 export interface CameraPoint { x: number; y: number; z: number }
 export interface SceneView {
@@ -30,11 +30,11 @@ export function createSceneView({ scale, settings, zoom, width, height, center, 
   const k = Math.max(1e-12, zoom.k), units = 1 / (scale * k);
   const { right, down, back } = cameraBasis(settings.viewTilt, settings.viewYaw, settings.viewRoll ?? 0);
   const strength = perspectiveStrength(settings);
-  // Increase focal length AND dolly distance toward orthographic, preserving
-  // the focus-plane framing and the standard homogeneous clipping contract.
+  // Projection strength still approaches orthographic continuously. FOV changes
+  // only the lens; orbit distance and image-plane movement use a fixed reference.
   const focalPixels = cameraFocalPixels(width, height, cameraFov(settings)) / (strength || 1);
-  const distance = focalPixels * units;
-  const focal = distance / units;
+  const distance = orbitFocalPixels(width,height,settings) * units;
+  const focal = focalPixels;
   const px = (width / 2 - zoom.x) * units, py = (height / 2 - zoom.y) * units;
   const focus = observer ? { x: observer.x-back.x*distance, y: observer.y-back.y*distance, z: observer.z-back.z*distance } : { x: center.x + px * right.x + py * down.x,
     y: center.y + px * right.y + py * down.y, z: center.z + px * right.z + py * down.z };
@@ -54,7 +54,7 @@ export function createSceneView({ scale, settings, zoom, width, height, center, 
   const projectCamera = (p: CameraPoint): ProjectedPoint => {
     // Signed projections are retained behind the near plane for adaptive curve
     // subdivision; only clipped geometry may be drawn.
-    const factor = settings.enablePerspective ? distance / (Math.abs(p.z) < 1e-15 ? 1e-15 : p.z) : 1;
+    const factor = settings.enablePerspective ? focal * units / (Math.abs(p.z) < 1e-15 ? 1e-15 : p.z) : 1;
     const screenX = width / 2 + p.x / units * factor;
     const screenY = height / 2 + p.y / units * factor;
     const finite = [p.x, p.y, p.z, screenX, screenY].every(Number.isFinite);
@@ -96,7 +96,8 @@ export function createSceneView({ scale, settings, zoom, width, height, center, 
   // Remote guide lines have no minimum alpha; physical bodies remain independent.
   const range = Math.max(width,height) * (settings.enablePerspective ? referenceDistance / focalPixels : units);
   const rangeOpacity = (d:number) => 1 / (1 + Math.pow(d / Math.max(range * 1.8, 1e-14), 4));
-  return { width,height,zoom:k,scale,focusDistanceAU:distance,referenceDistanceAU:referenceDistance,worldUnitsPerPixel:units,cameraPosition,
+  return { width,height,zoom:k,scale,focusDistanceAU:distance,referenceDistanceAU:referenceDistance,
+    worldUnitsPerPixel:settings.enablePerspective?distance/focal:units,cameraPosition,
     perspective:settings.enablePerspective,trueScale:settings.trueScale,project,toCamera,clipSegment,projectedRadius,sphereVisible,rangeOpacity,
     projectedSystemOpacity: (p,r) => {
       if (!(r > 0)) return 0;

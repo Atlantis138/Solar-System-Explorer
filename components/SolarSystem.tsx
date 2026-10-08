@@ -11,7 +11,7 @@ import { AU_SCALE_SCHEMATIC, AU_SCALE_TRUE, SUN_DATA } from '../data/constants';
 import NearbyStars from './NearbyStars';
 import { VirtualJoystick, NavigationInput } from './VirtualJoystick';
 import { createSceneView } from '../core/sceneView';
-import { cameraFocalPixels, cameraFov, perspectiveStrength, moveObserver, rotateCameraLocal, solarResetPose, cameraBasis } from '../core/cameraOptics';
+import { cameraFocalPixels, cameraFov, perspectiveStrength, moveObserver, rotateCameraLocal, solarResetPose, cameraBasis, orbitFocalPixels } from '../core/cameraOptics';
 import { nearbyOpacity, nearbyPositionAU, solarZoomExtent, LIGHT_YEAR_AU } from '../core/nearbyStars';
 import { dragDegreesPerPixel, framedOrbitPose, orbitGestureTransform, pinchTravelDelta, automaticTravelSpeed, travelContextDistance, travelMultiplier } from '../core/cameraNavigation';
 import { useSceneGestures } from '../hooks/useSceneGestures';
@@ -282,7 +282,7 @@ const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(({
     const current=navigationRef.current;
     const scale=current.settings.trueScale?AU_SCALE_TRUE:AU_SCALE_SCHEMATIC;
     const start=createSceneView({scale,settings:current.settings,zoom:current.zoom,width:dimensions.w,height:dimensions.h,center:centerOfRotation,observer:current.cameraEye});
-    const focal=cameraFocalPixels(dimensions.w,dimensions.h,cameraFov(current.settings))/(perspectiveStrength(current.settings)||1);
+    const focal=orbitFocalPixels(dimensions.w,dimensions.h,current.settings);
     const targetK=stellar?focal/(scale*15*LIGHT_YEAR_AU):.8*(current.settings.trueScale?AU_SCALE_SCHEMATIC/AU_SCALE_TRUE:1);
     const targetDistance=focal/(scale*targetK);
     onPlanetSelect(null);onCameraFocusChange(null);setRoamTarget(null);setStellarLocked(false);
@@ -316,7 +316,7 @@ const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(({
     onCameraFocusChange(null); setStellarLocked(true);
     const p = nearbyPositionAU(star); setStarTarget(p);setFreeOrbitCenter(p);
     const distance = (visit ? .7 : 3) * LIGHT_YEAR_AU;
-    const focal = cameraFocalPixels(dimensions.w, dimensions.h, cameraFov(settings));
+    const focal = orbitFocalPixels(dimensions.w, dimensions.h, visit?{...settings,enablePerspective:true,cameraPerspective:1}:settings);
     const k = focal / (AU_SCALE_SCHEMATIC * distance);
     if (visit) {
       setRoamTarget({id:null,center:p});
@@ -419,7 +419,11 @@ const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(({
       const units=current.settings.enablePerspective ? scene.referenceDistanceAU/(cameraFocalPixels(current.dimensions.w,current.dimensions.h,cameraFov(current.settings))/(perspectiveStrength(current.settings)||1)) : scene.worldUnitsPerPixel;
       const next=moveObserver(current.cameraEye,current.settings.viewTilt,current.settings.viewYaw,-dx*units,-dy*units,0,current.settings.viewRoll??0);
       navigationRef.current.cameraEye=next;setCameraEye(next);
-    }else syncTransform(d3.zoomIdentity.translate(current.zoom.x+dx,current.zoom.y+dy).scale(current.zoom.k));
+    }else {
+      const lensRatio=current.settings.enablePerspective
+        ? cameraFocalPixels(current.dimensions.w,current.dimensions.h,cameraFov(current.settings))/cameraFocalPixels(current.dimensions.w,current.dimensions.h,72) : 1;
+      syncTransform(d3.zoomIdentity.translate(current.zoom.x+dx/lensRatio,current.zoom.y+dy/lensRatio).scale(current.zoom.k));
+    }
   };
   const pinchStart=useRef({zoom:zoomTransform,eye:cameraEye,distance:0,settings});
   const gestures=useSceneGestures(containerRef,{
@@ -446,7 +450,9 @@ const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(({
         navigationRef.current.cameraEye=eye;setCameraEye(eye);
       }
       else {
-        const transform=orbitGestureTransform(pinchStart.current.zoom,current.dimensions.w,current.dimensions.h,ratio,dx,dy,solarZoomExtent(current.settings.trueScale,current.settings.showNearbyStars!==false));
+        const lensRatio=current.settings.enablePerspective
+          ? cameraFocalPixels(current.dimensions.w,current.dimensions.h,cameraFov(current.settings))/cameraFocalPixels(current.dimensions.w,current.dimensions.h,72) : 1;
+        const transform=orbitGestureTransform(pinchStart.current.zoom,current.dimensions.w,current.dimensions.h,ratio,dx/lensRatio,dy/lensRatio,solarZoomExtent(current.settings.trueScale,current.settings.showNearbyStars!==false));
         syncTransform(d3.zoomIdentity.translate(transform.x,transform.y).scale(transform.k));
       }
     },
@@ -470,7 +476,7 @@ const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(({
     const startEye=scene.cameraPosition,roaming=!!current.cameraEye;
     setRoamTarget(roaming?{id:null,center:ORIGIN}:null);
     const scale=current.settings.trueScale?AU_SCALE_TRUE:AU_SCALE_SCHEMATIC;
-    const focal=cameraFocalPixels(dimensions.w,dimensions.h,cameraFov(current.settings))/(perspectiveStrength(current.settings)||1);
+    const focal=orbitFocalPixels(dimensions.w,dimensions.h,current.settings);
     const targetK=focal/(scale*pose.distance);
     const angle=(a:number,b:number,t:number)=>a+((b-a+540)%360-180)*t;
     const update=(t:number)=>{

@@ -30,6 +30,27 @@ test('FOV is shared on the short axis and fixed observer rotates in place',()=>{
   assert.ok(Math.hypot(scene.cameraPosition.x-observer.x,scene.cameraPosition.y-observer.y,scene.cameraPosition.z-observer.z)<1e-10);
  }
 });
+test('FOV changes the whole scene without moving orbit or flight observers, including offset framing',()=>{
+ for(const [width,height] of [[1000,700],[390,844]]) for(const strength of [.2,1]) {
+  const base={...options,width,height,zoom:{x:width/2-90,y:height/2+40,k:.8},
+    settings:{...options.settings,cameraPerspective:strength,viewTilt:37,viewYaw:61,viewRoll:23}};
+  const initial=createSceneView(base),observer=initial.cameraPosition;
+  const point={x:1,y:2,z:.5};
+  const projections=[];
+  for(const fov of [30,72,100]) {
+   const orbit=createSceneView({...base,settings:{...base.settings,cameraFov:fov}});
+   const flight=createSceneView({...base,settings:{...base.settings,cameraFov:fov},observer,
+     zoom:{...base.zoom,x:width/2,y:height/2}});
+   assert.deepEqual(orbit.cameraPosition,observer);
+   const a=orbit.project(point),b=flight.project(point);
+   assert.ok(Math.hypot(a.screenX-b.screenX,a.screenY-b.screenY)<1e-8);
+   assert.ok(Math.abs(orbit.projectedRadius(.1,a)-flight.projectedRadius(.1,b))<1e-8);
+   assert.ok(Math.abs(orbit.focusDistanceAU/orbit.worldUnitsPerPixel-cameraFocalPixels(width,height,fov)/strength)<1e-8);
+   projections.push(Math.hypot(a.screenX-width/2,a.screenY-height/2));
+  }
+  assert.ok(projections[0]>projections[1]&&projections[1]>projections[2]);
+ }
+});
 test('sideways travel creates more parallax for nearer stars; camera plane clips correctly',()=>{
  const observer={x:0,y:0,z:10},a=createSceneView({...options,observer}),b=createSceneView({...options,observer:moveObserver(observer,90,0,1,0,0)});
  const near={x:0,y:0,z:8},far={x:0,y:0,z:-10};
